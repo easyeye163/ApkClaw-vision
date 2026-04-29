@@ -77,6 +77,23 @@ The agent follows an **Observe → Think → Act → Verify** protocol:
 - **Token Optimization**: Replaces historical `get_screen_info` results with placeholders to save tokens, keeping only the most recent one
 - **System Dialog Handling**: When `getRootInActiveWindow()` returns null (protected system dialog detected), takes a screenshot, sends it to the user, and aborts the task
 
+### Vision Perception
+
+The agent supports **automatic vision perception**, allowing the LLM to "see" the device screen:
+
+- **Auto Screenshot Injection**: After observation tools (`get_screen_info`, `take_screenshot`, `scroll_to_find`, `find_node_info`) execute successfully, the screen is automatically captured and injected into the LLM request
+- **Image Format**: Screenshots are converted to Base64-encoded JPEG (max width 720px, quality 75%) and passed via OpenAI-compatible `image_url` format:
+  ```json
+  {
+    "type": "image_url",
+    "image_url": {
+      "url": "data:image/jpeg;base64,{base64_image}"
+    }
+  }
+  ```
+- **History Optimization**: Only the most recent screenshot is kept globally; historical screenshots are cleared to save tokens
+- **Compatible Models**: Vision-capable models like `gpt-4o`, `gpt-4-vision-preview`, `claude-3-5-sonnet`, etc.
+
 ### LLM Integration
 
 Pluggable LLM backends via `LlmClientFactory`:

@@ -77,6 +77,23 @@ Agent 遵循 **观察 → 思考 → 行动 → 验证** 协议：
 - **Token 优化**：将历史 `get_screen_info` 结果替换为占位符以节省 token，仅保留最近一次
 - **系统弹窗处理**：当 `getRootInActiveWindow()` 返回 null（检测到受保护的系统弹窗）时，截图发送给用户并终止任务
 
+### 视觉感知 (Vision)
+
+Agent 支持**自动视觉感知**功能，让 LLM 能够"看到"设备屏幕：
+
+- **自动截图注入**：在观察类工具（`get_screen_info`、`take_screenshot`、`scroll_to_find`、`find_node_info`）执行成功后，自动截取屏幕并注入 LLM 请求
+- **图片格式**：截图以 JPEG 格式（最大宽度 720px，质量 75%）转换为 Base64，通过 OpenAI API 兼容的 `image_url` 格式传递：
+  ```json
+  {
+    "type": "image_url",
+    "image_url": {
+      "url": "data:image/jpeg;base64,{base64_image}"
+    }
+  }
+  ```
+- **历史截图优化**：全局只保留最新一张截图，历史截图会被清理以节省 token
+- **适用模型**：支持视觉能力的模型如 `gpt-4o`、`gpt-4-vision-preview`、`claude-3-5-sonnet` 等
+
 ### LLM 集成
 
 通过 `LlmClientFactory` 实现可插拔的 LLM 后端：
