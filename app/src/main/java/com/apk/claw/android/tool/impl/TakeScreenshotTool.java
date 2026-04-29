@@ -81,9 +81,15 @@ public class TakeScreenshotTool extends BaseTool {
         }
     }
 
+    /** 视觉方案截图最大宽度（像素），超过此宽度会等比缩放 */
+    private static final int MAX_SCREENSHOT_WIDTH = 720;
+    /** 视觉方案截图 JPEG 质量 */
+    private static final int SCREENSHOT_JPEG_QUALITY = 75;
+
     /**
      * Capture a screenshot and return it as a base64-encoded JPEG string.
-     * This is used by the agent loop to embed screenshots directly in LLM messages.
+     * The screenshot is scaled down to a max width of 720px to reduce token usage,
+     * and compressed as JPEG at 75% quality.
      *
      * @return base64 JPEG string, or null if capture failed
      */
@@ -98,8 +104,17 @@ public class TakeScreenshotTool extends BaseTool {
                 bitmap.recycle();
                 bitmap = softBitmap;
             }
+            // 缩放到最大 720px 宽度，减少 base64 体积和 LLM token 消耗
+            if (bitmap.getWidth() > MAX_SCREENSHOT_WIDTH) {
+                float scale = (float) MAX_SCREENSHOT_WIDTH / bitmap.getWidth();
+                int newWidth = MAX_SCREENSHOT_WIDTH;
+                int newHeight = (int) (bitmap.getHeight() * scale);
+                Bitmap scaled = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true);
+                bitmap.recycle();
+                bitmap = scaled;
+            }
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos);
+            bitmap.compress(Bitmap.CompressFormat.JPEG, SCREENSHOT_JPEG_QUALITY, baos);
             bitmap.recycle();
             return Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
         } catch (Exception e) {

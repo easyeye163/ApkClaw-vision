@@ -25,19 +25,19 @@ public class TapTool extends BaseTool {
 
     @Override
     public String getDescriptionEN() {
-        return "Tap at the specified screen position using percentage coordinates (x, y). Coordinates are automatically converted to absolute pixels.";
+        return "Tap at the specified screen position using percentage coordinates (x_percent, y_percent) ranging from 0 to 100. Coordinates are automatically converted to absolute pixels.";
     }
 
     @Override
     public String getDescriptionCN() {
-        return "在指定的屏幕位置点击，使用百分比坐标 (x, y)。坐标会自动转换为实际像素。";
+        return "在指定的屏幕位置点击，使用百分比坐标 (x_percent, y_percent)，范围 0~100。坐标会自动转换为实际像素。";
     }
 
     @Override
     public List<ToolParameter> getParameters() {
         return Arrays.asList(
-                new ToolParameter("x", "number", "X coordinate as percentage (0.0-1.0). 0.0=left edge, 1.0=right edge, 0.5=center", true),
-                new ToolParameter("y", "number", "Y coordinate as percentage (0.0-1.0). 0.0=top edge, 1.0=bottom edge, 0.5=center", true)
+                new ToolParameter("x_percent", "number", "X coordinate as percentage (0-100). 0=left edge, 100=right edge, 50=center", true),
+                new ToolParameter("y_percent", "number", "Y coordinate as percentage (0-100). 0=top edge, 100=bottom edge, 50=center", true)
         );
     }
 
@@ -47,14 +47,14 @@ public class TapTool extends BaseTool {
         if (service == null) {
             return ToolResult.error("Accessibility service is not running");
         }
-        double xPercent = requireDouble(params, "x");
-        double yPercent = requireDouble(params, "y");
-        if (xPercent < 0 || xPercent > 1 || yPercent < 0 || yPercent > 1) {
-            return ToolResult.error("Percentage coordinates must be between 0.0 and 1.0");
+        double xPercent = requireDouble(params, "x_percent");
+        double yPercent = requireDouble(params, "y_percent");
+        if (xPercent < 0 || xPercent > 100 || yPercent < 0 || yPercent > 100) {
+            return ToolResult.error("Percentage coordinates must be between 0 and 100");
         }
         int[] screenSize = getScreenSize();
-        int absX = (int)(xPercent * screenSize[0]);
-        int absY = (int)(yPercent * screenSize[1]);
+        int absX = (int)(xPercent / 100.0 * screenSize[0]);
+        int absY = (int)(yPercent / 100.0 * screenSize[1]);
         boolean success = service.performTap(absX, absY);
         return success ? ToolResult.success("Tapped at (" + xPercent + ", " + yPercent + ") → absolute (" + absX + ", " + absY + ")")
                 : ToolResult.error("Failed to tap at (" + absX + ", " + absY + ")");

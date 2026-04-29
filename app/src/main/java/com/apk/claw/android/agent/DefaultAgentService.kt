@@ -243,6 +243,31 @@ class DefaultAgentService : AgentService {
             }
         }
 
+        // 0.5. 清理历史截图：只保留最新一张截图的 ImageContent，其余替换为纯文本占位
+        // 通过视觉消息标记文本来识别含截图的 UserMessage
+        val VISION_MARKER = "这是当前手机屏幕的截图"
+        val lastVisionIdx = messages.indexOfLast {
+            it is UserMessage && try { it.singleText().contains(VISION_MARKER) } catch (_: Exception) { false }
+        }
+        var removedImages = 0
+        for (i in messages.indices) {
+            if (i == lastVisionIdx) continue
+            val msg = messages[i]
+            if (msg is UserMessage) {
+                try {
+                    val text = msg.singleText()
+                    if (text.contains(VISION_MARKER)) {
+                        // 替换为纯文本（去除图片以节省 token）
+                        messages[i] = UserMessage.from(text)
+                        removedImages++
+                    }
+                } catch (_: Exception) { }
+            }
+        }
+        if (removedImages > 0) {
+            XLog.d(TAG, "清理历史截图: 移除 ${removedImages} 张旧截图，保留最新一张")
+        }
+
         // 1. 找出所有 AiMessage 的索引，每个代表一轮
         val aiIndices = messages.indices.filter { messages[it] is AiMessage }
         if (aiIndices.size <= KEEP_RECENT_ROUNDS) return
@@ -357,8 +382,8 @@ class DefaultAgentService : AgentService {
                             .build()
                     )
                     val visionMessage = UserMessage.from(
-                        "这是当前手机屏幕的截图。请分析屏幕内容，识别界面元素位置。" +
-                        "如需点击，请使用 tap(x, y)，坐标使用百分比（0.0~1.0）。",
+                        "这是当前手机屏幕的截图（已缩放至最大720px）。请分析屏幕内容，识别界面元素位置。" +
+                        "如需点击，请使用 tap(x_percent, y_percent)，坐标使用百分比（0~100），其中(50,50)为屏幕中央。",
                         imageContent
                     )
                     messages.add(visionMessage)

@@ -130,7 +130,7 @@ public class ScrollToFindTool extends BaseTool {
     }
 
     /**
-     * 在当前屏幕查找包含指定文本的元素，找到返回 ToolResult，没找到返回 null。
+     * 在当前屏幕查找包含指定文本的元素，找到返回 ToolResult（百分比坐标），没找到返回 null。
      */
     private ToolResult findElement(ClawAccessibilityService service, String text) {
         List<AccessibilityNodeInfo> nodes = service.findNodesByText(text);
@@ -138,6 +138,9 @@ public class ScrollToFindTool extends BaseTool {
             return null;
         }
         try {
+            int[] screenSize = getScreenSize();
+            int screenWidth = screenSize[0];
+            int screenHeight = screenSize[1];
             // 取第一个可见的节点
             for (AccessibilityNodeInfo node : nodes) {
                 if (node.isVisibleToUser()) {
@@ -145,14 +148,19 @@ public class ScrollToFindTool extends BaseTool {
                     node.getBoundsInScreen(bounds);
                     int centerX = bounds.centerX();
                     int centerY = bounds.centerY();
+                    // 计算百分比坐标（0-100）
+                    double xPercent = Math.round(centerX * 10000.0 / screenWidth) / 100.0;
+                    double yPercent = Math.round(centerY * 10000.0 / screenHeight) / 100.0;
                     StringBuilder sb = new StringBuilder();
                     sb.append("Found element with text \"").append(text).append("\"");
                     sb.append("\n  bounds=").append(bounds.toShortString());
-                    sb.append("\n  center=(").append(centerX).append(", ").append(centerY).append(")");
+                    sb.append("\n  center_absolute=(").append(centerX).append(", ").append(centerY).append(")");
+                    sb.append("\n  center_percent=(").append(xPercent).append(", ").append(yPercent).append(")");
                     sb.append("\n  clickable=").append(node.isClickable());
                     if (node.getClassName() != null) {
                         sb.append("\n  class=").append(node.getClassName());
                     }
+                    sb.append("\n  → To click, use: tap(x_percent=").append((int)xPercent).append(", y_percent=").append((int)yPercent).append(")");
                     return ToolResult.success(sb.toString());
                 }
             }
