@@ -7,13 +7,16 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.widget.SwitchCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.apk.claw.android.R
+import com.apk.claw.android.appViewModel
 import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.integration.FeatureIntegrationManager
 import com.apk.claw.android.skill.SkillSystem
+import com.apk.claw.android.ui.chat.ChatActivity
 import com.apk.claw.android.widget.CommonToolbar
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 
@@ -21,6 +24,8 @@ class SkillManageActivity : BaseActivity() {
 
     companion object {
         private const val TAG = "SkillManageActivity"
+        const val EXTRA_SKILL_PROMPT = "skill_prompt"
+        const val EXTRA_SKILL_NAME = "skill_name"
     }
 
     private lateinit var rvSkills: RecyclerView
@@ -63,6 +68,18 @@ class SkillManageActivity : BaseActivity() {
                     intent.putExtra("skillId", skill.id)
                     startActivity(intent)
                 }
+            }
+
+            override fun onExecute(skill: SkillSystem.Skill) {
+                if (appViewModel.isTaskRunning()) {
+                    Toast.makeText(this@SkillManageActivity, getString(R.string.chat_task_running), Toast.LENGTH_SHORT).show()
+                    return
+                }
+                Toast.makeText(this@SkillManageActivity, getString(R.string.skill_execute_success), Toast.LENGTH_SHORT).show()
+                val intent = Intent(this@SkillManageActivity, ChatActivity::class.java)
+                intent.putExtra(EXTRA_SKILL_PROMPT, skill.promptTemplate)
+                intent.putExtra(EXTRA_SKILL_NAME, skill.name)
+                startActivity(intent)
             }
         })
 

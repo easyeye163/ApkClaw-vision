@@ -279,6 +279,12 @@
     <string name="skill_keywords_hint">Separate with commas</string>
     <string name="skill_prompt">Prompt Template</string>
     <string name="skill_save">Save</string>
+    <string name="skill_execute">Execute</string>
+    <string name="skill_delete">Delete</string>
+    <string name="skill_delete_confirm">Delete skill \"%s\"?</string>
+    <string name="skill_deleted">Skill deleted</string>
+    <string name="skill_saved">Skill saved</string>
+    <string name="skill_execute_success">Executing skill</string>
 
     <!-- Timeline -->
     <string name="timeline_title">Task History</string>

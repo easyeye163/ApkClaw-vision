@@ -223,4 +223,73 @@
     <string name="input_dialog_need_more">至少输入%d个字符</string>
     <string name="input_dialog_need_less">最多输入%d个字符</string>
     <string name="input_dialog_no_zero">请输入非零数值</string>
+
+    <!-- 推理面板 -->
+    <string name="reasoning_panel_title">AI 推理过程</string>
+    <string name="reasoning_status_running">运行中…</string>
+    <string name="reasoning_status_thinking">思考中…</string>
+    <string name="reasoning_status_tool_exec">执行工具…</string>
+    <string name="reasoning_status_completed">任务完成</string>
+    <string name="reasoning_status_error">任务失败</string>
+    <string name="reasoning_cancel_task">停止任务</string>
+    <string name="reasoning_clear_log">清空日志</string>
+    <string name="reasoning_step_count">%d 步</string>
+    <string name="reasoning_step_thinking">思考</string>
+    <string name="reasoning_step_tool_call">工具调用</string>
+    <string name="reasoning_step_tool_result">执行结果</string>
+    <string name="reasoning_step_user_input">用户输入</string>
+    <string name="reasoning_step_error">错误</string>
+    <string name="reasoning_step_completion">完成</string>
+    <string name="cd_reasoning_step_icon">推理步骤图标</string>
+    <string name="cd_minimize_panel">最小化推理面板</string>
+    <string name="cd_expand_panel">展开推理面板</string>
+    <string name="cd_cancel_task">取消当前任务</string>
+    <string name="cd_clear_log">清空推理日志</string>
+
+    <!-- 首页快捷操作 -->
+    <string name="home_btn_chat">对话</string>
+    <string name="home_btn_skills">技能</string>
+    <string name="home_btn_timeline">历史</string>
+
+    <!-- 对话 -->
+    <string name="chat_title">AI 对话</string>
+    <string name="chat_input_hint">输入消息…</string>
+    <string name="chat_send">发送</string>
+    <string name="chat_attach_image">添加图片</string>
+    <string name="chat_welcome">你好！我是你的AI助手，可以帮助你操控手机、执行任务和回答问题。请问有什么需要我帮忙的？</string>
+    <string name="chat_task_running">当前有任务正在执行，请等待完成后再发送。</string>
+    <string name="chat_thinking">思考中…</string>
+    <string name="chat_error">错误：%s</string>
+
+    <!-- 技能管理 -->
+    <string name="skill_title">技能</string>
+    <string name="skill_tab_all">全部</string>
+    <string name="skill_tab_auto_reply">自动回复</string>
+    <string name="skill_tab_phone_control">手机控制</string>
+    <string name="skill_tab_cross_app">跨应用</string>
+    <string name="skill_empty">暂无技能</string>
+    <string name="skill_add">添加技能</string>
+    <string name="skill_edit">编辑</string>
+    <string name="skill_builtin">内置</string>
+    <string name="skill_add_title">新建技能</string>
+    <string name="skill_edit_title">编辑技能</string>
+    <string name="skill_name">名称</string>
+    <string name="skill_description">描述</string>
+    <string name="skill_keywords">触发关键词</string>
+    <string name="skill_keywords_hint">多个关键词用逗号分隔</string>
+    <string name="skill_prompt">提示词模板</string>
+    <string name="skill_save">保存</string>
+    <string name="skill_execute">执行</string>
+    <string name="skill_delete">删除</string>
+    <string name="skill_delete_confirm">确定删除技能\"%s\"吗？</string>
+    <string name="skill_deleted">技能已删除</string>
+    <string name="skill_saved">技能已保存</string>
+    <string name="skill_execute_success">开始执行技能</string>
+
+    <!-- 时间线 -->
+    <string name="timeline_title">任务历史</string>
+    <string name="timeline_empty">暂无任务记录</string>
+    <string name="timeline_today">今天</string>
+    <string name="timeline_this_week">本周</string>
+    <string name="timeline_older">更早</string>
 </resources>

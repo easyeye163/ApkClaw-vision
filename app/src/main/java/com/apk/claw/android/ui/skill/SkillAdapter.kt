@@ -43,6 +43,7 @@ class SkillAdapter(
         private val tvRunCount: TextView = itemView.findViewById(R.id.tvRunCount)
         private val tvBuiltIn: TextView = itemView.findViewById(R.id.tvBuiltIn)
         private val switchEnable: SwitchCompat = itemView.findViewById(R.id.switchEnable)
+        private val btnExecute: ImageView = itemView.findViewById(R.id.btnExecute)
         private val btnEdit: ImageView = itemView.findViewById(R.id.btnEdit)
 
         fun bind(skill: SkillSystem.Skill) {
@@ -58,6 +59,10 @@ class SkillAdapter(
                 callback.onToggle(skill, isChecked)
             }
 
+            btnExecute.setOnClickListener {
+                callback.onExecute(skill)
+            }
+
             btnEdit.setOnClickListener {
                 callback.onEdit(skill)
             }
@@ -69,5 +74,6 @@ class SkillAdapter(
     interface OnSkillAction {
         fun onToggle(skill: SkillSystem.Skill, enabled: Boolean)
         fun onEdit(skill: SkillSystem.Skill)
+        fun onExecute(skill: SkillSystem.Skill)
     }
 }

@@ -101,6 +101,16 @@
             android:layout_marginStart="8pt" />
 
         <ImageView
+            android:id="@+id/btnExecute"
+            android:layout_width="32pt"
+            android:layout_height="32pt"
+            android:layout_marginStart="8pt"
+            android:padding="6pt"
+            android:src="@drawable/ic_play"
+            android:contentDescription="@string/skill_execute"
+            app:tint="@color/colorBrandPrimary" />
+
+        <ImageView
             android:id="@+id/btnEdit"
             android:layout_width="32pt"
             android:layout_height="32pt"

@@ -15,6 +15,7 @@ import com.apk.claw.android.appViewModel
 import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.channel.Channel
 import com.apk.claw.android.floating.FloatingCircleManager
+import com.apk.claw.android.ui.skill.SkillManageActivity
 import com.apk.claw.android.widget.CommonToolbar
 import java.io.ByteArrayOutputStream
 
@@ -66,6 +67,8 @@ class ChatActivity : BaseActivity() {
         rvMessages.layoutManager = LinearLayoutManager(this)
 
         addWelcomeMessage()
+
+        handleSkillIntent()
     }
 
     private fun initViews() {
@@ -99,6 +102,24 @@ class ChatActivity : BaseActivity() {
             isUser = false,
             timestamp = System.currentTimeMillis()
         ))
+    }
+
+    private fun handleSkillIntent() {
+        val skillPrompt = intent.getStringExtra(SkillManageActivity.EXTRA_SKILL_PROMPT)
+        val skillName = intent.getStringExtra(SkillManageActivity.EXTRA_SKILL_NAME)
+        if (skillPrompt != null && skillPrompt.isNotEmpty()) {
+            etMessage.setText(skillPrompt)
+            if (skillName != null) {
+                adapter.addMessage(ChatMessage(
+                    text = "执行技能: $skillName",
+                    isUser = true,
+                    timestamp = System.currentTimeMillis()
+                ))
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                sendMessage()
+            }, 300)
+        }
     }
 
     private fun sendMessage() {
