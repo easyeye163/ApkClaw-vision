@@ -11,7 +11,9 @@ import com.apk.claw.android.timeline.TaskTimeline
 import java.text.SimpleDateFormat
 import java.util.*
 
-class TimelineAdapter : RecyclerView.Adapter<TimelineAdapter.TaskViewHolder>() {
+class TimelineAdapter(
+    private val onItemClick: (TaskTimeline.TaskRecord) -> Unit
+) : RecyclerView.Adapter<TimelineAdapter.TaskViewHolder>() {
 
     private val tasks = mutableListOf<TaskTimeline.TaskRecord>()
     private val dateFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
@@ -63,6 +65,10 @@ class TimelineAdapter : RecyclerView.Adapter<TimelineAdapter.TaskViewHolder>() {
 
             tvChannel.text = task.channelType
             tvRounds.text = "${task.totalRounds}r"
+
+            itemView.setOnClickListener {
+                onItemClick(task)
+            }
         }
     }
 }

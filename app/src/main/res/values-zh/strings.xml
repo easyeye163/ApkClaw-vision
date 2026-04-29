@@ -292,4 +292,30 @@
     <string name="timeline_today">今天</string>
     <string name="timeline_this_week">本周</string>
     <string name="timeline_older">更早</string>
+
+    <!-- 任务详情 -->
+    <string name="task_detail_title">任务详情</string>
+    <string name="task_steps">执行步骤</string>
+    <string name="task_form_skill">形成 Skill</string>
+    <string name="task_status_completed">成功</string>
+    <string name="task_status_failed">失败</string>
+    <string name="task_status_cancelled">已取消</string>
+    <string name="task_status_running">运行中</string>
+    <string name="task_channel">渠道: %s</string>
+    <string name="task_rounds">轮数: %d</string>
+    <string name="task_tokens">Token: %d</string>
+
+    <!-- 步骤类型 -->
+    <string name="step_thinking">思考</string>
+    <string name="step_tool_call">工具调用</string>
+    <string name="step_tool_result">执行结果</string>
+    <string name="step_user_input">用户输入</string>
+    <string name="step_system_event">系统事件</string>
+    <string name="step_error">错误</string>
+    <string name="step_completion">完成</string>
+
+    <!-- 技能生成 -->
+    <string name="skill_generating">正在生成技能…</string>
+    <string name="skill_generated">技能已创建: %s</string>
+    <string name="skill_generate_failed">技能生成失败: %s</string>
 </resources>

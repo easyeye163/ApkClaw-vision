@@ -1,5 +1,6 @@
 package com.apk.claw.android.ui.timeline
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -38,7 +39,11 @@ class TimelineActivity : BaseActivity() {
         rvTasks = findViewById(R.id.rvTasks)
         tvEmpty = findViewById(R.id.tvEmpty)
 
-        adapter = TimelineAdapter()
+        adapter = TimelineAdapter { task ->
+            val intent = Intent(this, TaskDetailActivity::class.java)
+            intent.putExtra(TaskDetailActivity.EXTRA_RECORD_ID, task.id)
+            startActivity(intent)
+        }
         rvTasks.adapter = adapter
         rvTasks.layoutManager = LinearLayoutManager(this)
     }

@@ -292,4 +292,30 @@
     <string name="timeline_today">Today</string>
     <string name="timeline_this_week">This Week</string>
     <string name="timeline_older">Older</string>
+
+    <!-- Task Detail -->
+    <string name="task_detail_title">Task Detail</string>
+    <string name="task_steps">Execution Steps</string>
+    <string name="task_form_skill">Generate Skill</string>
+    <string name="task_status_completed">Success</string>
+    <string name="task_status_failed">Failed</string>
+    <string name="task_status_cancelled">Cancelled</string>
+    <string name="task_status_running">Running</string>
+    <string name="task_channel">Channel: %s</string>
+    <string name="task_rounds">Rounds: %d</string>
+    <string name="task_tokens">Tokens: %d</string>
+
+    <!-- Step Types -->
+    <string name="step_thinking">Thinking</string>
+    <string name="step_tool_call">Tool Call</string>
+    <string name="step_tool_result">Result</string>
+    <string name="step_user_input">User Input</string>
+    <string name="step_system_event">System Event</string>
+    <string name="step_error">Error</string>
+    <string name="step_completion">Done</string>
+
+    <!-- Skill Generation -->
+    <string name="skill_generating">Generating skill…</string>
+    <string name="skill_generated">Skill created: %s</string>
+    <string name="skill_generate_failed">Skill generation failed: %s</string>
 </resources>
