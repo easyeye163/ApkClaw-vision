@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingHorizontal="10dp"
+    android:paddingVertical="5dp"
+    android:gravity="top">
+
+    <!-- 左侧：彩色指示条 + 图标 -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginTop="2dp">
+
+        <!-- 彩色竖条指示器 -->
+        <View
+            android:id="@+id/iconIndicator"
+            android:layout_width="3dp"
+            android:layout_height="30dp"
+            android:background="@color/colorBrandPrimary" />
+
+        <!-- 图标 -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/ivStepIcon"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginTop="3dp"
+            android:contentDescription="@string/cd_reasoning_step_icon"
+            android:src="@drawable/ic_check"
+            app:tint="@color/colorBrandOnPrimary" />
+
+    </LinearLayout>
+
+    <!-- 右侧：内容区域 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="8dp">
+
+        <!-- 顶部：轮次 + 时间 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvRound"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="#1"
+                android:textColor="#99FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  ·  "
+                android:textColor="#61FFFFFF"
+                android:textSize="9sp" />
+
+            <TextView
+                android:id="@+id/tvTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="#61FFFFFF"
+                android:textSize="9sp" />
+
+        </LinearLayout>
+
+        <!-- 主内容 -->
+        <TextView
+            android:id="@+id/tvContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text=""
+            android:textColor="#E6FFFFFF"
+            android:textSize="11sp"
+            android:lineSpacingMultiplier="1.2"
+            android:ellipsize="end" />
+
+        <!-- 详细参数（工具调用时展示） -->
+        <LinearLayout
+            android:id="@+id/layoutDetail"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="3dp"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="3dp"
+            android:background="#1AFFFFFF"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tvDetail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textColor="#ADFFFFFF"
+                android:textSize="9sp"
+                android:lineSpacingMultiplier="1.1"
+                android:fontFamily="monospace" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</LinearLayout>

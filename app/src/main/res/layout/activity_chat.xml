@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBgPrimary">
+
+    <com.apk.claw.android.widget.CommonToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="56pt"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvMessages"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:paddingVertical="8pt"
+        android:scrollbars="vertical"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintBottom_toTopOf="@id/layoutInput" />
+
+    <LinearLayout
+        android:id="@+id/layoutInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="12pt"
+        android:paddingVertical="8pt"
+        android:background="@color/colorBgSecondary"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <ImageView
+            android:id="@+id/btnAttach"
+            android:layout_width="36pt"
+            android:layout_height="36pt"
+            android:padding="8pt"
+            android:src="@drawable/ic_attach"
+            android:contentDescription="@string/chat_attach_image"
+            app:tint="@color/colorTextSecondary" />
+
+        <EditText
+            android:id="@+id/etMessage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8pt"
+            android:background="@drawable/bg_chat_input"
+            android:paddingHorizontal="12pt"
+            android:paddingVertical="8pt"
+            android:hint="@string/chat_input_hint"
+            android:textColorHint="@color/colorTextSecondary"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="14sp"
+            android:maxLines="4"
+            android:inputType="textMultiLine" />
+
+        <ImageView
+            android:id="@+id/btnSend"
+            android:layout_width="36pt"
+            android:layout_height="36pt"
+            android:layout_marginStart="8pt"
+            android:padding="6pt"
+            android:src="@drawable/ic_send"
+            android:contentDescription="@string/chat_send"
+            app:tint="@color/colorBrandPrimary" />
+
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/ivPreview"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_marginEnd="12pt"
+        android:layout_marginBottom="8pt"
+        android:scaleType="centerCrop"
+        android:visibility="gone"
+        android:background="@color/colorBgSecondary"
+        app:layout_constraintBottom_toTopOf="@id/layoutInput"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <ImageView
+        android:id="@+id/btnRemovePreview"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_close"
+        android:visibility="gone"
+        app:tint="@color/colorErrorPrimary"
+        app:layout_constraintTop_toTopOf="@id/ivPreview"
+        app:layout_constraintEnd_toEndOf="@id/ivPreview" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

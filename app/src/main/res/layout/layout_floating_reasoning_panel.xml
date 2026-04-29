@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/panelRoot"
+    android:layout_width="260dp"
+    android:layout_height="360dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp"
+        app:cardBackgroundColor="#E62C2C2E">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <!-- 顶部标题栏 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:background="#1A5856D6">
+
+                <!-- 标题 -->
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/reasoning_panel_title"
+                    android:textColor="@color/colorBrandOnPrimary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <!-- 步骤计数 -->
+                <TextView
+                    android:id="@+id/tvStepCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="0 steps"
+                    android:textColor="#99FFFFFF"
+                    android:textSize="10sp" />
+
+                <!-- 最小化按钮 -->
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:id="@+id/btnMinimize"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:padding="4dp"
+                    android:contentDescription="@string/cd_minimize_panel"
+                    android:src="@drawable/ic_minimize"
+                    app:tint="@color/colorBrandOnPrimary" />
+
+            </LinearLayout>
+
+            <!-- 任务名称 -->
+            <TextView
+                android:id="@+id/tvTaskName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="12dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="4dp"
+                android:text=""
+                android:textColor="#E6FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:visibility="gone" />
+
+            <!-- 状态指示条 -->
+            <LinearLayout
+                android:id="@+id/layoutStatusBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="4dp"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+
+                <!-- 动态脉冲点 -->
+                <View
+                    android:id="@+id/pulseDot"
+                    android:layout_width="6dp"
+                    android:layout_height="6dp"
+                    android:background="@color/colorSuccessPrimary" />
+
+                <TextView
+                    android:id="@+id/tvStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/reasoning_status_running"
+                    android:textColor="#99FFFFFF"
+                    android:textSize="10sp" />
+
+            </LinearLayout>
+
+            <!-- 分割线 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.5dp"
+                android:background="#33FFFFFF" />
+
+            <!-- 推理步骤列表 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvReasoningSteps"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:paddingVertical="4dp"
+                android:clipToPadding="false"
+                android:scrollbars="vertical"
+                android:scrollbarSize="3dp"
+                android:fadeScrollbars="false" />
+
+            <!-- 底部操作栏 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="12dp"
+                android:background="#0A000000">
+
+                <!-- 取消任务 -->
+                <TextView
+                    android:id="@+id/btnCancel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/reasoning_cancel_task"
+                    android:textColor="#FFF6685D"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:paddingVertical="4dp"
+                    android:gravity="center" />
+
+                <!-- 清空日志 -->
+                <TextView
+                    android:id="@+id/btnClear"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/reasoning_clear_log"
+                    android:textColor="#99FFFFFF"
+                    android:textSize="11sp"
+                    android:paddingVertical="4dp"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+</FrameLayout>

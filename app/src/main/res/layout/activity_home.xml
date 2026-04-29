@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBgPrimary"
+    android:paddingHorizontal="16pt">
+
+    <com.apk.claw.android.widget.CommonToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="56pt"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/layoutQuickActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="12pt"
+        app:layout_constraintTop_toBottomOf="@id/toolbar">
+
+        <LinearLayout
+            android:id="@+id/btnChat"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="12pt"
+            android:background="@color/colorBgSecondary">
+
+            <ImageView
+                android:layout_width="32pt"
+                android:layout_height="32pt"
+                android:src="@drawable/ic_chat"
+                app:tint="@color/colorBrandPrimary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6pt"
+                android:text="@string/home_btn_chat"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnSkills"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="12pt"
+            android:layout_marginStart="8pt"
+            android:background="@color/colorBgSecondary">
+
+            <ImageView
+                android:layout_width="32pt"
+                android:layout_height="32pt"
+                android:src="@drawable/ic_skills"
+                app:tint="@color/colorBrandPrimary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6pt"
+                android:text="@string/home_btn_skills"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnTimeline"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="12pt"
+            android:layout_marginStart="8pt"
+            android:background="@color/colorBgSecondary">
+
+            <ImageView
+                android:layout_width="32pt"
+                android:layout_height="32pt"
+                android:src="@drawable/ic_timeline"
+                app:tint="@color/colorBrandPrimary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6pt"
+                android:text="@string/home_btn_timeline"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <com.apk.claw.android.widget.PermissionCardView
+        android:id="@+id/cardAccessibility"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16pt"
+        app:cardIcon="@drawable/ic_accessibility"
+        app:cardTitle="@string/home_card_accessibility_title"
+        app:cardSubtitle="@string/home_card_accessibility_subtitle"
+        app:layout_constraintTop_toBottomOf="@id/layoutQuickActions" />
+
+    <com.apk.claw.android.widget.PermissionCardView
+        android:id="@+id/cardNotification"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12pt"
+        app:cardIcon="@drawable/ic_notification"
+        app:cardTitle="@string/home_card_notification_title"
+        app:cardSubtitle="@string/home_card_notification_subtitle"
+        app:layout_constraintTop_toBottomOf="@id/cardAccessibility" />
+
+    <com.apk.claw.android.widget.PermissionCardView
+        android:id="@+id/cardSystemWindow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12pt"
+        app:cardIcon="@drawable/ic_window"
+        app:cardTitle="@string/home_card_system_window_title"
+        app:cardSubtitle="@string/home_card_system_window_subtitle"
+        app:layout_constraintTop_toBottomOf="@id/cardNotification" />
+
+    <com.apk.claw.android.widget.PermissionCardView
+        android:id="@+id/cardBattery"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12pt"
+        app:cardIcon="@drawable/ic_battery"
+        app:cardTitle="@string/home_card_battery_title"
+        app:cardSubtitle="@string/home_card_battery_subtitle"
+        app:layout_constraintTop_toBottomOf="@id/cardSystemWindow" />
+
+    <com.apk.claw.android.widget.PermissionCardView
+        android:id="@+id/cardStorage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12pt"
+        app:cardIcon="@drawable/ic_storage"
+        app:cardTitle="@string/home_card_storage_title"
+        app:cardSubtitle="@string/home_card_storage_subtitle"
+        app:layout_constraintTop_toBottomOf="@id/cardBattery" />
+
+    <com.apk.claw.android.widget.KButton
+        android:id="@+id/btnCancelTask"
+        android:layout_width="match_parent"
+        android:layout_height="48pt"
+        android:layout_marginTop="24pt"
+        android:text="@string/home_cancel_task"
+        android:textSize="16sp"
+        android:visibility="gone"
+        app:btnBackground="@color/colorErrorPrimary"
+        app:btnTextColor="@color/colorErrorOnPrimary"
+        app:layout_constraintTop_toBottomOf="@id/cardStorage" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
