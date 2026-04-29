@@ -118,6 +118,14 @@ abstract class BaseTool {
         return params[key]?.toString() ?: defaultValue
     }
 
+    protected fun requireDouble(params: @JvmSuppressWildcards Map<String, Any>, key: String): Double {
+        val value = params[key] ?: throw IllegalArgumentException("Missing required parameter: $key")
+        return when (value) {
+            is Number -> value.toDouble()
+            else -> value.toString().toDouble()
+        }
+    }
+
     protected fun optionalBoolean(params: @JvmSuppressWildcards Map<String, Any>, key: String, defaultValue: Boolean): Boolean {
         val value = params[key] ?: return defaultValue
         return when (value) {

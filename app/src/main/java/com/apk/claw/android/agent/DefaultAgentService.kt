@@ -19,9 +19,12 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dev.langchain4j.data.message.AiMessage
 import dev.langchain4j.data.message.ChatMessage
+import dev.langchain4j.data.message.ImageContent
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.ToolExecutionResultMessage
 import dev.langchain4j.data.message.UserMessage
+import dev.langchain4j.data.image.Image
+import com.apk.claw.android.tool.impl.TakeScreenshotTool
 import dev.langchain4j.agent.tool.ToolExecutionRequest
 import java.io.File
 import java.util.LinkedList
@@ -214,7 +217,10 @@ class DefaultAgentService : AgentService {
             when (msg) {
                 is AiMessage -> (msg.text()?.length ?: 0) + (msg.toolExecutionRequests()?.sumOf { it.arguments()?.length ?: 0 } ?: 0)
                 is ToolExecutionResultMessage -> msg.text().length
-                is UserMessage -> msg.singleText().length
+                is UserMessage -> {
+                    // UserMessage may contain ImageContent, only count text
+                    try { msg.singleText().length } catch (_: Exception) { 0 }
+                }
                 is SystemMessage -> msg.text().length
                 else -> 0
             }
@@ -262,7 +268,10 @@ class DefaultAgentService : AgentService {
             when (msg) {
                 is AiMessage -> (msg.text()?.length ?: 0) + (msg.toolExecutionRequests()?.sumOf { it.arguments()?.length ?: 0 } ?: 0)
                 is ToolExecutionResultMessage -> msg.text().length
-                is UserMessage -> msg.singleText().length
+                is UserMessage -> {
+                    // UserMessage may contain ImageContent, only count text
+                    try { msg.singleText().length } catch (_: Exception) { 0 }
+                }
                 is SystemMessage -> msg.text().length
                 else -> 0
             }
@@ -336,6 +345,30 @@ class DefaultAgentService : AgentService {
 
             // 发送前分级压缩历史消息，节省 token
             compressHistoryForSend(messages)
+
+            // 自动截图并嵌入 LLM 消息（视觉方案）
+            val screenshotBase64 = TakeScreenshotTool.captureScreenBase64()
+            if (screenshotBase64 != null) {
+                try {
+                    val imageContent = ImageContent.from(
+                        Image.builder()
+                            .base64Data(screenshotBase64)
+                            .mimeType("image/jpeg")
+                            .build()
+                    )
+                    val visionMessage = UserMessage.from(
+                        "这是当前手机屏幕的截图。请分析屏幕内容，识别界面元素位置。" +
+                        "如需点击，请使用 tap(x, y)，坐标使用百分比（0.0~1.0）。",
+                        imageContent
+                    )
+                    messages.add(visionMessage)
+                    XLog.d(TAG, "Screenshot embedded as ImageContent (${screenshotBase64.length} chars)")
+                } catch (e: Exception) {
+                    XLog.w(TAG, "Failed to embed screenshot, continuing without image", e)
+                }
+            } else {
+                XLog.w(TAG, "Failed to capture screenshot for vision embedding")
+            }
 
             // LLM 调用（带重试）
             val llmResponse: LlmResponse

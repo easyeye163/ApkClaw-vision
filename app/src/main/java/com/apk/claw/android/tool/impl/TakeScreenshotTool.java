@@ -1,6 +1,7 @@
 package com.apk.claw.android.tool.impl;
 
 import android.graphics.Bitmap;
+import android.util.Base64;
 
 import com.apk.claw.android.ClawApplication;
 import com.apk.claw.android.R;
@@ -9,6 +10,7 @@ import com.apk.claw.android.tool.BaseTool;
 import com.apk.claw.android.tool.ToolParameter;
 import com.apk.claw.android.tool.ToolResult;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.Collections;
@@ -76,6 +78,33 @@ public class TakeScreenshotTool extends BaseTool {
         } catch (Exception e) {
             bitmap.recycle();
             return ToolResult.error("Failed to save screenshot: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Capture a screenshot and return it as a base64-encoded JPEG string.
+     * This is used by the agent loop to embed screenshots directly in LLM messages.
+     *
+     * @return base64 JPEG string, or null if capture failed
+     */
+    public static String captureScreenBase64() {
+        ClawAccessibilityService service = ClawAccessibilityService.getInstance();
+        if (service == null) return null;
+        Bitmap bitmap = service.takeScreenshot(5000);
+        if (bitmap == null) return null;
+        try {
+            Bitmap softBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false);
+            if (softBitmap != null) {
+                bitmap.recycle();
+                bitmap = softBitmap;
+            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos);
+            bitmap.recycle();
+            return Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+        } catch (Exception e) {
+            bitmap.recycle();
+            return null;
         }
     }
 }
