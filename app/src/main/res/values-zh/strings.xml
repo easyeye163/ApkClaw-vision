@@ -285,6 +285,7 @@
     <string name="skill_deleted">技能已删除</string>
     <string name="skill_saved">技能已保存</string>
     <string name="skill_execute_success">开始执行技能</string>
+    <string name="skill_cannot_delete_builtin">内置技能不可删除</string>
 
     <!-- 时间线 -->
     <string name="timeline_title">任务历史</string>

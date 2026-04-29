@@ -82,6 +82,26 @@ class SkillManageActivity : BaseActivity() {
                 intent.putExtra(com.apk.claw.android.ui.chat.ChatActivity.EXTRA_SKILL_NAME, skill.name)
                 startActivity(intent)
             }
+
+            override fun onDelete(skill: SkillSystem.Skill) {
+                if (skill.isBuiltIn) {
+                    Toast.makeText(this@SkillManageActivity, getString(R.string.skill_cannot_delete_builtin), Toast.LENGTH_SHORT).show()
+                    return
+                }
+                com.apk.claw.android.widget.ConfirmDialog.showWarm(
+                    this@SkillManageActivity,
+                    getString(R.string.skill_delete),
+                    getString(R.string.skill_delete_confirm, skill.name),
+                    getString(R.string.common_confirm),
+                    getString(R.string.common_cancel),
+                    isDismissible = true,
+                    onAction = {
+                        skillSystem.deleteSkill(skill.id)
+                        loadSkills()
+                        Toast.makeText(this@SkillManageActivity, getString(R.string.skill_deleted), Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
         })
 
         rvSkills.adapter = adapter

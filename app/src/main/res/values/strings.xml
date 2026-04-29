@@ -285,6 +285,7 @@
     <string name="skill_deleted">Skill deleted</string>
     <string name="skill_saved">Skill saved</string>
     <string name="skill_execute_success">Executing skill</string>
+    <string name="skill_cannot_delete_builtin">Cannot delete built-in skill</string>
 
     <!-- Timeline -->
     <string name="timeline_title">Task History</string>
