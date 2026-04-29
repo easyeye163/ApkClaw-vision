@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -15,6 +16,7 @@ import com.apk.claw.android.appViewModel
 import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.channel.Channel
 import com.apk.claw.android.floating.FloatingCircleManager
+import com.apk.claw.android.integration.FeatureIntegrationManager
 import com.apk.claw.android.ui.skill.SkillManageActivity
 import com.apk.claw.android.widget.CommonToolbar
 import java.io.ByteArrayOutputStream
@@ -23,6 +25,9 @@ class ChatActivity : BaseActivity() {
 
     companion object {
         private const val TAG = "ChatActivity"
+        const val EXTRA_SKILL_PROMPT = "skill_prompt"
+        const val EXTRA_SKILL_NAME = "skill_name"
+        const val EXTRA_MATCHED_SKILL_ID = "matched_skill_id"
     }
 
     private lateinit var rvMessages: RecyclerView
@@ -35,6 +40,8 @@ class ChatActivity : BaseActivity() {
 
     private var selectedImageUri: Uri? = null
     private var selectedImageData: ByteArray? = null
+
+    private lateinit var skillSystem: com.apk.claw.android.skill.SkillSystem
 
     private val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -60,6 +67,8 @@ class ChatActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
+
+        skillSystem = FeatureIntegrationManager.getInstance(this).skillSystem
 
         initViews()
         adapter = ChatAdapter()
@@ -105,19 +114,34 @@ class ChatActivity : BaseActivity() {
     }
 
     private fun handleSkillIntent() {
-        val skillPrompt = intent.getStringExtra(SkillManageActivity.EXTRA_SKILL_PROMPT)
-        val skillName = intent.getStringExtra(SkillManageActivity.EXTRA_SKILL_NAME)
+        val skillPrompt = intent.getStringExtra(EXTRA_SKILL_PROMPT)
+        val skillName = intent.getStringExtra(EXTRA_SKILL_NAME)
+        val matchedSkillId = intent.getStringExtra(EXTRA_MATCHED_SKILL_ID)
+
+        if (matchedSkillId != null) {
+            val skill = skillSystem.getSkill(matchedSkillId)
+            if (skill != null) {
+                adapter.addMessage(ChatMessage(
+                    text = getString(R.string.skill_matched, skill.name),
+                    isUser = false,
+                    timestamp = System.currentTimeMillis()
+                ))
+                executeWithSkill(skill)
+                return
+            }
+        }
+
         if (skillPrompt != null && skillPrompt.isNotEmpty()) {
             etMessage.setText(skillPrompt)
             if (skillName != null) {
                 adapter.addMessage(ChatMessage(
-                    text = "执行技能: $skillName",
+                    text = getString(R.string.skill_executing, skillName),
                     isUser = true,
                     timestamp = System.currentTimeMillis()
                 ))
             }
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                sendMessage()
+                sendMessageWithPrompt(skillPrompt)
             }, 300)
         }
     }
@@ -126,13 +150,38 @@ class ChatActivity : BaseActivity() {
         val text = etMessage.text.toString().trim()
         if (text.isEmpty() && selectedImageData == null) return
 
-        val userMessage = ChatMessage(
-            text = text,
-            isUser = true,
-            imageData = selectedImageData,
+        val matchedSkill = skillSystem.matchSkill(text)
+        if (matchedSkill != null) {
+            showSkillMatchDialog(matchedSkill, text)
+            return
+        }
+
+        sendMessageInternal(text)
+    }
+
+    private fun sendMessageWithPrompt(prompt: String) {
+        sendMessageInternal(prompt)
+    }
+
+    private fun executeWithSkill(skill: com.apk.claw.android.skill.SkillSystem.Skill) {
+        val prompt = skillSystem.buildSkillPrompt(skill, "")
+        sendMessageInternal(prompt)
+    }
+
+    private fun showSkillMatchDialog(skill: com.apk.claw.android.skill.SkillSystem.Skill, originalText: String) {
+        adapter.addMessage(ChatMessage(
+            text = getString(R.string.skill_matched, skill.name),
+            isUser = false,
             timestamp = System.currentTimeMillis()
-        )
-        adapter.addMessage(userMessage)
+        ))
+
+        Toast.makeText(this, getString(R.string.skill_matched, skill.name), Toast.LENGTH_SHORT).show()
+
+        val prompt = skillSystem.buildSkillPrompt(skill, originalText)
+        sendMessageInternal(prompt)
+    }
+
+    private fun sendMessageInternal(text: String) {
         etMessage.text.clear()
 
         if (selectedImageData != null) {
@@ -142,6 +191,13 @@ class ChatActivity : BaseActivity() {
             selectedImageData = null
         }
 
+        val userMessage = ChatMessage(
+            text = text,
+            isUser = true,
+            imageData = selectedImageData,
+            timestamp = System.currentTimeMillis()
+        )
+        adapter.addMessage(userMessage)
         rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
 
         if (appViewModel.isTaskRunning()) {

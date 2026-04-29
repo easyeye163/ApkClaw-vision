@@ -63,11 +63,12 @@ class SkillManageActivity : BaseActivity() {
             }
 
             override fun onEdit(skill: SkillSystem.Skill) {
-                if (!skill.isBuiltIn) {
-                    val intent = Intent(this@SkillManageActivity, SkillEditActivity::class.java)
-                    intent.putExtra("skillId", skill.id)
-                    startActivity(intent)
+                val intent = Intent(this@SkillManageActivity, SkillEditActivity::class.java)
+                intent.putExtra(SkillEditActivity.EXTRA_SKILL_ID, skill.id)
+                if (skill.isBuiltIn) {
+                    intent.putExtra(SkillEditActivity.EXTRA_IS_COPY, true)
                 }
+                startActivity(intent)
             }
 
             override fun onExecute(skill: SkillSystem.Skill) {
@@ -76,9 +77,9 @@ class SkillManageActivity : BaseActivity() {
                     return
                 }
                 Toast.makeText(this@SkillManageActivity, getString(R.string.skill_execute_success), Toast.LENGTH_SHORT).show()
-                val intent = Intent(this@SkillManageActivity, ChatActivity::class.java)
-                intent.putExtra(EXTRA_SKILL_PROMPT, skill.promptTemplate)
-                intent.putExtra(EXTRA_SKILL_NAME, skill.name)
+                val intent = Intent(this@SkillManageActivity, com.apk.claw.android.ui.chat.ChatActivity::class.java)
+                intent.putExtra(com.apk.claw.android.ui.chat.ChatActivity.EXTRA_SKILL_PROMPT, skill.promptTemplate)
+                intent.putExtra(com.apk.claw.android.ui.chat.ChatActivity.EXTRA_SKILL_NAME, skill.name)
                 startActivity(intent)
             }
         })

@@ -318,4 +318,9 @@
     <string name="skill_generating">Generating skill…</string>
     <string name="skill_generated">Skill created: %s</string>
     <string name="skill_generate_failed">Skill generation failed: %s</string>
+    <string name="skill_matched">Skill matched: %s</string>
+    <string name="skill_executing">Executing skill: %s</string>
+    <string name="skill_copy_title">Copy Skill</string>
+    <string name="skill_copied">Skill copied</string>
+    <string name="skill_name_prompt_required">Please enter name and prompt</string>
 </resources>

@@ -67,7 +67,7 @@ class SkillAdapter(
                 callback.onEdit(skill)
             }
 
-            btnEdit.visibility = if (skill.isBuiltIn) View.GONE else View.VISIBLE
+            btnEdit.visibility = View.VISIBLE
         }
     }
 

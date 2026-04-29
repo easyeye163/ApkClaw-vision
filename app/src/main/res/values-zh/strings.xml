@@ -318,4 +318,9 @@
     <string name="skill_generating">正在生成技能…</string>
     <string name="skill_generated">技能已创建: %s</string>
     <string name="skill_generate_failed">技能生成失败: %s</string>
+    <string name="skill_matched">已匹配技能: %s</string>
+    <string name="skill_executing">执行技能: %s</string>
+    <string name="skill_copy_title">复制技能</string>
+    <string name="skill_copied">技能已复制</string>
+    <string name="skill_name_prompt_required">请输入名称和提示词</string>
 </resources>
