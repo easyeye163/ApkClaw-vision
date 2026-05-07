@@ -164,6 +164,56 @@ Each tool extends `BaseTool`, implements `execute(Map<String, Any>): ToolResult`
 
 Channel credentials can be configured via the in-app settings page or the LAN HTTP server (`http://<device-ip>:9527`).
 
+## Cloud Chat Mode
+
+In addition to the messaging channels, ApkClaw supports a built-in **Cloud Chat** mode that communicates with a backend server via WebSocket. This mode enables two-way real-time messaging directly from the in-app chat interface.
+
+### Features
+
+- **Real-time WebSocket Communication**: Maintains a persistent long-lived WebSocket connection to the cloud server for low-latency message exchange
+- **Server-Side Push Notifications**: The server can proactively push messages (`type=push`) to the client at any time, which are displayed directly in the chat interface
+- **System Notification Bar**: Push messages trigger a system notification with `IMPORTANCE_HIGH` priority, supporting `BigTextStyle` for long text display, vibration alerts, and tap-to-open behavior that navigates directly to `ChatActivity` with the push content pre-loaded
+- **Auto-Reconnect with Exponential Backoff**: When the WebSocket connection drops, the client automatically attempts to reconnect using exponential backoff — starting at 2 seconds, doubling each attempt (2s → 4s → 8s → 16s → 32s → 60s), capped at 60 seconds, with a maximum of 10 retry attempts
+- **Notification Permission Handling**: On Android 13+ (API 33+), the app automatically detects and requests `POST_NOTIFICATIONS` permission when cloud chat mode is enabled, ensuring push notifications work out of the box
+- **Push Intent Pass-through**: Clicking a push notification delivers the full message text to `ChatActivity` via `EXTRA_PUSH_TEXT`, which is then displayed in the chat list and persisted to history
+
+### Message Protocol
+
+Messages are exchanged as JSON over WebSocket:
+
+```json
+// Client → Server (user sends a message)
+{
+  "type": "text",
+  "session_id": "android_1746590000000",
+  "text": "Hello, how are you?"
+}
+
+// Server → Client (conversation reply)
+{
+  "type": "text",
+  "text": "I'm doing great! How can I help you?"
+}
+
+// Server → Client (server-initiated push)
+{
+  "type": "push",
+  "text": "You have a new task assignment..."
+}
+
+// Server → Client (error)
+{
+  "type": "error",
+  "message": "Session not found"
+}
+```
+
+### Configuration
+
+Cloud chat can be configured in Settings > Cloud Chat Config:
+- **WebSocket URL**: The cloud server's WebSocket endpoint
+- **Session ID**: Auto-generated if not specified (format: `android_<timestamp>`)
+
 ## Accessibility Service
 
 `ClawAccessibilityService` (Java) is the core device interaction layer:
