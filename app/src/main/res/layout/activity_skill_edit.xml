@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBgPrimary">
+
+    <com.apk.claw.android.widget.CommonToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="56pt"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:padding="16pt"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/skill_name"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8pt"
+                android:background="@color/colorBgSecondary"
+                android:padding="12pt"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp"
+                android:maxLines="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16pt"
+                android:text="@string/skill_description"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etDescription"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8pt"
+                android:background="@color/colorBgSecondary"
+                android:padding="12pt"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp"
+                android:maxLines="2" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16pt"
+                android:text="@string/skill_keywords"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etKeywords"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8pt"
+                android:background="@color/colorBgSecondary"
+                android:padding="12pt"
+                android:hint="@string/skill_keywords_hint"
+                android:textColorHint="@color/colorTextSecondary"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp"
+                android:maxLines="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16pt"
+                android:text="@string/skill_prompt"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/etPrompt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8pt"
+                android:background="@color/colorBgSecondary"
+                android:padding="12pt"
+                android:minHeight="120dp"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="14sp"
+                android:gravity="top"
+                android:inputType="textMultiLine" />
+
+            <com.apk.claw.android.widget.KButton
+                android:id="@+id/btnSave"
+                android:layout_width="match_parent"
+                android:layout_height="48pt"
+                android:layout_marginTop="24pt"
+                android:text="@string/skill_save"
+                android:textSize="16sp"
+                app:btnBackground="@color/colorBrandPrimary"
+                app:btnTextColor="@color/colorBrandOnPrimary" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

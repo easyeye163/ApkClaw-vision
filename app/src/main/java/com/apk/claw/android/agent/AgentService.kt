@@ -1,0 +1,11 @@
+package com.apk.claw.android.agent
+
+interface AgentService {
+    fun initialize(config: AgentConfig)
+    fun updateConfig(config: AgentConfig)
+    fun executeTask(userPrompt: String, callback: AgentCallback)
+    fun executeTask(userPrompt: String, userImageBase64: String?, callback: AgentCallback)
+    fun cancel()
+    fun shutdown()
+    fun isRunning(): Boolean
+}
