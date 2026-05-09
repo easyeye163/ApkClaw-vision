@@ -690,6 +690,16 @@ object DirectWebRTCManager {
     }
 
     /**
+     * Check if a remote video track has been received.
+     */
+    fun hasRemoteVideoTrack(): Boolean = remoteVideoTrack != null
+
+    /**
+     * Get current session ID.
+     */
+    fun getSessionId(): String? = sessionId
+
+    /**
      * Send assistant text to CyberVerse for TTS/avatar (used by OpenClaw mode bridge).
      */
     fun sendAssistantText(text: String) {

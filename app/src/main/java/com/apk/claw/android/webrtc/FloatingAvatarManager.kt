@@ -2,11 +2,15 @@ package com.apk.claw.android.webrtc
 
 import android.content.Context
 import android.graphics.PixelFormat
+import android.graphics.SurfaceTexture
+import android.media.MediaPlayer
 import android.os.Build
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
+import android.view.Surface
+import android.view.TextureView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -18,12 +22,13 @@ import org.webrtc.SurfaceViewRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * Floating avatar window manager (singleton).
  * Shows a small draggable overlay (120dp circle) with the WebRTC video renderer for digital avatar.
- * Auto-shows when WebRTC is enabled and has config, auto-hides when disabled.
+ * Falls back to a local test MP4 when WebRTC video is not available.
  */
 object FloatingAvatarManager {
 
@@ -35,6 +40,8 @@ object FloatingAvatarManager {
     private var windowManager: WindowManager? = null
     private var avatarView: View? = null
     private var renderer: SurfaceViewRenderer? = null
+    private var fallbackTextureView: TextureView? = null
+    private var fallbackMediaPlayer: MediaPlayer? = null
     private var statusIndicator: ImageView? = null
     private var speakingIndicator: View? = null
 
@@ -46,7 +53,9 @@ object FloatingAvatarManager {
 
     private var observeConnectionJob: Job? = null
     private var observeAvatarStatusJob: Job? = null
+    private var videoFlowCheckJob: Job? = null
 
+    private var hasVideoFlow = false  // Track if WebRTC video is actually rendering frames
     private var appContext: Context? = null
 
     /**
@@ -80,10 +89,15 @@ object FloatingAvatarManager {
             setZOrderMediaOverlay(true)
         }
 
+        // Create fallback TextureView for MP4 playback
+        fallbackTextureView = TextureView(ctx)
+
         // Inflate the avatar overlay layout
         val inflater = LayoutInflater.from(ctx)
         avatarView = inflater.inflate(R.layout.layout_floating_avatar, null).also { view ->
             val container = view.findViewById<FrameLayout>(R.id.avatarVideoContainer)
+            // Add fallback first (behind), then renderer on top
+            fallbackTextureView?.let { container?.addView(it, 0) }
             container?.addView(renderer)
             statusIndicator = view.findViewById(R.id.ivAvatarStatus)
             speakingIndicator = view.findViewById(R.id.speakingIndicator)
@@ -145,6 +159,12 @@ object FloatingAvatarManager {
             return
         }
 
+        // Set up fallback video playback
+        setupFallbackVideo(ctx)
+
+        // Initially: show fallback, hide WebRTC renderer
+        showFallbackVideo()
+
         // Bind the renderer to DirectWebRTCManager
         renderer?.let { DirectWebRTCManager.bindRenderer(it) }
 
@@ -163,6 +183,97 @@ object FloatingAvatarManager {
     }
 
     /**
+     * Set up the fallback MP4 video player.
+     */
+    private fun setupFallbackVideo(ctx: Context) {
+        fallbackTextureView?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
+                try {
+                    val surface = Surface(surfaceTexture)
+                    if (fallbackMediaPlayer == null) {
+                        fallbackMediaPlayer = MediaPlayer().apply {
+                            val resId = ctx.resources.getIdentifier(
+                                "test_avatar", "raw", ctx.packageName
+                            )
+                            if (resId != 0) {
+                                setDataSource(ctx, 
+                                    android.net.Uri.parse("android.resource://${ctx.packageName}/$resId"))
+                            }
+                            setSurface(surface)
+                            isLooping = true
+                            setVolume(0f, 0f)  // Mute
+                            prepareAsync()
+                            setOnPreparedListener { mp ->
+                                mp.start()
+                                Log.d(TAG, "Fallback video started playing")
+                            }
+                            setOnErrorListener { _, what, extra ->
+                                Log.e(TAG, "Fallback video error: what=$what extra=$extra")
+                                false
+                            }
+                        }
+                    } else {
+                        fallbackMediaPlayer?.setSurface(surface)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error setting up fallback video", e)
+                }
+            }
+
+            override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
+            override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+                stopFallbackVideo()
+                return true
+            }
+            override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
+        }
+    }
+
+    /**
+     * Show the fallback test video and hide the WebRTC renderer.
+     */
+    private fun showFallbackVideo() {
+        hasVideoFlow = false
+        if (renderer != null) {
+            renderer?.visibility = View.GONE
+        }
+        if (fallbackTextureView != null) {
+            fallbackTextureView?.visibility = View.VISIBLE
+        }
+    }
+
+    /**
+     * Show the WebRTC renderer and hide the fallback video.
+     * Called when WebRTC video frames are confirmed flowing.
+     */
+    fun showWebRTCVideo() {
+        if (!hasVideoFlow) {
+            hasVideoFlow = true
+            Log.d(TAG, "Switching to WebRTC video (frames confirmed)")
+            stopFallbackVideo()
+            if (renderer != null) {
+                renderer?.visibility = View.VISIBLE
+            }
+            if (fallbackTextureView != null) {
+                fallbackTextureView?.visibility = View.GONE
+            }
+        }
+    }
+
+    /**
+     * Stop fallback video playback.
+     */
+    private fun stopFallbackVideo() {
+        try {
+            fallbackMediaPlayer?.stop()
+        } catch (_: Exception) {}
+        try {
+            fallbackMediaPlayer?.release()
+        } catch (_: Exception) {}
+        fallbackMediaPlayer = null
+    }
+
+    /**
      * Hide the floating avatar window.
      */
     @JvmStatic
@@ -171,6 +282,11 @@ object FloatingAvatarManager {
         observeConnectionJob = null
         observeAvatarStatusJob?.cancel()
         observeAvatarStatusJob = null
+        videoFlowCheckJob?.cancel()
+        videoFlowCheckJob = null
+
+        stopFallbackVideo()
+        hasVideoFlow = false
 
         DirectWebRTCManager.unbindRenderer()
 
@@ -183,6 +299,7 @@ object FloatingAvatarManager {
         }
         avatarView = null
         renderer = null
+        fallbackTextureView = null
         statusIndicator = null
         speakingIndicator = null
         Log.d(TAG, "Floating avatar hidden")
@@ -237,14 +354,21 @@ object FloatingAvatarManager {
                     }
                     DirectWebRTCManager.ConnectionState.CONNECTED -> {
                         statusIndicator?.visibility = View.GONE
+                        // After connecting, wait a few seconds for video frames to arrive
+                        // If no frames, keep showing fallback
+                        startVideoFlowCheck()
                     }
                     DirectWebRTCManager.ConnectionState.ERROR -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_error)
                         statusIndicator?.visibility = View.VISIBLE
+                        videoFlowCheckJob?.cancel()
+                        showFallbackVideo()
                     }
                     DirectWebRTCManager.ConnectionState.DISCONNECTED -> {
                         statusIndicator?.visibility = View.VISIBLE
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_disconnected)
+                        videoFlowCheckJob?.cancel()
+                        showFallbackVideo()
                     }
                 }
             }
@@ -255,6 +379,10 @@ object FloatingAvatarManager {
                 when (status) {
                     DirectWebRTCManager.AvatarStatus.SPEAKING -> {
                         speakingIndicator?.visibility = View.VISIBLE
+                        // Speaking means video is definitely flowing
+                        if (DirectWebRTCManager.connectionState.value == DirectWebRTCManager.ConnectionState.CONNECTED) {
+                            showWebRTCVideo()
+                        }
                     }
                     DirectWebRTCManager.AvatarStatus.PROCESSING -> {
                         speakingIndicator?.visibility = View.VISIBLE
@@ -263,6 +391,25 @@ object FloatingAvatarManager {
                         speakingIndicator?.visibility = View.GONE
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Start checking for actual video flow after WebRTC connection.
+     * After 5 seconds, if WebRTC manager has a video track, assume video is flowing
+     * and switch from fallback to WebRTC renderer.
+     */
+    private fun startVideoFlowCheck() {
+        videoFlowCheckJob?.cancel()
+        videoFlowCheckJob = CoroutineScope(Dispatchers.Main).launch {
+            delay(5000)  // Wait 5 seconds for video frames to start
+            // Check if WebRTC has a remote video track
+            if (DirectWebRTCManager.hasRemoteVideoTrack()) {
+                Log.d(TAG, "Remote video track exists, switching to WebRTC renderer")
+                showWebRTCVideo()
+            } else {
+                Log.d(TAG, "No remote video track after 5s, keeping fallback")
             }
         }
     }

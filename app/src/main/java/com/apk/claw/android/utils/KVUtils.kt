@@ -217,19 +217,6 @@ object KVUtils {
     fun getCloudChatSessionId(): String = getString(KEY_CLOUD_CHAT_SESSION_ID, "")
     fun setCloudChatSessionId(value: String) = putString(KEY_CLOUD_CHAT_SESSION_ID, value)
 
-    // ==================== 聊天模式 (VoiceLLM / OpenClaw) ====================
-    private const val KEY_CHAT_MODE = "KEY_CHAT_MODE"
-    private const val KEY_OPENCLAW_WS_URL = "KEY_OPENCLAW_WS_URL"
-
-    /** 聊天模式: "voicellm" 或 "openclaw" */
-    fun getChatMode(): String = getString(KEY_CHAT_MODE, "voicellm")
-    fun setChatMode(value: String) = putString(KEY_CHAT_MODE, value)
-
-    fun isOpenClawMode(): Boolean = getChatMode() == "openclaw"
-
-    fun getOpenClawWsUrl(): String = getString(KEY_OPENCLAW_WS_URL, "ws://7110f985.r21.cpolar.top")
-    fun setOpenClawWsUrl(value: String) = putString(KEY_OPENCLAW_WS_URL, value)
-
     // ==================== CyberVerse Direct WebRTC 配置 ====================
     private const val KEY_WEBRTC_ENABLED = "KEY_WEBRTC_ENABLED"
     private const val KEY_WEBRTC_URL = "KEY_WEBRTC_URL"
@@ -269,6 +256,12 @@ object KVUtils {
      */
     fun getPipelineMode(): String = getString(KEY_CV_PIPELINE_MODE, "omni")
     fun setPipelineMode(value: String) = putString(KEY_CV_PIPELINE_MODE, value)
+
+    /** 兼容旧接口: 聊天模式别名 */
+    fun getChatMode(): String = if (getPipelineMode() == "standard") "openclaw" else "voicellm"
+    fun setChatMode(value: String) = setPipelineMode(if (value == "openclaw") "standard" else "omni")
+
+    fun isOpenClawMode(): Boolean = getPipelineMode() == "standard"
 
     /** OpenClaw brain WebSocket 地址（仅 standard 模式使用） */
     fun getOpenClawWsUrl(): String = getString(KEY_CV_OPENCLAW_WS_URL, "ws://7110f985.r21.cpolar.top")
