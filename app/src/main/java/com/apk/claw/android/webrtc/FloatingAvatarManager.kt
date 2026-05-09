@@ -351,6 +351,8 @@ object FloatingAvatarManager {
                     DirectWebRTCManager.ConnectionState.CONNECTING -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_connecting)
                         statusIndicator?.visibility = View.VISIBLE
+                        // Center the icon during connecting
+                        centerStatusIcon()
                     }
                     DirectWebRTCManager.ConnectionState.CONNECTED -> {
                         statusIndicator?.visibility = View.GONE
@@ -361,12 +363,15 @@ object FloatingAvatarManager {
                     DirectWebRTCManager.ConnectionState.ERROR -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_error)
                         statusIndicator?.visibility = View.VISIBLE
+                        // Move to corner so it doesn't block the fallback video
+                        moveStatusToCorner()
                         videoFlowCheckJob?.cancel()
                         showFallbackVideo()
                     }
                     DirectWebRTCManager.ConnectionState.DISCONNECTED -> {
                         statusIndicator?.visibility = View.VISIBLE
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_disconnected)
+                        centerStatusIcon()
                         videoFlowCheckJob?.cancel()
                         showFallbackVideo()
                     }
@@ -397,19 +402,62 @@ object FloatingAvatarManager {
 
     /**
      * Start checking for actual video flow after WebRTC connection.
-     * After 5 seconds, if WebRTC manager has a video track, assume video is flowing
-     * and switch from fallback to WebRTC renderer.
+     * Polls every 3 seconds for up to 30 seconds.
      */
     private fun startVideoFlowCheck() {
         videoFlowCheckJob?.cancel()
         videoFlowCheckJob = CoroutineScope(Dispatchers.Main).launch {
-            delay(5000)  // Wait 5 seconds for video frames to start
-            // Check if WebRTC has a remote video track
-            if (DirectWebRTCManager.hasRemoteVideoTrack()) {
-                Log.d(TAG, "Remote video track exists, switching to WebRTC renderer")
-                showWebRTCVideo()
-            } else {
-                Log.d(TAG, "No remote video track after 5s, keeping fallback")
+            var checks = 0
+            val maxChecks = 10  // 10 * 3s = 30 seconds
+            while (checks < maxChecks) {
+                delay(3000)
+                checks++
+                if (DirectWebRTCManager.connectionState.value != DirectWebRTCManager.ConnectionState.CONNECTED) {
+                    Log.d(TAG, "Connection lost during video check, stopping")
+                    break
+                }
+                if (DirectWebRTCManager.hasRemoteVideoTrack()) {
+                    Log.d(TAG, "Remote video track found after ${checks * 3}s, switching to WebRTC renderer")
+                    showWebRTCVideo()
+                    statusIndicator?.visibility = View.GONE
+                    break
+                }
+                Log.d(TAG, "No remote video track yet, check $checks/$maxChecks")
+            }
+            if (!hasVideoFlow && checks >= maxChecks) {
+                Log.w(TAG, "No video track after ${maxChecks * 3}s total, keeping fallback")
+            }
+        }
+    }
+
+    /**
+     * Move status icon to top-right corner (error state - don't block video).
+     */
+    private fun moveStatusToCorner() {
+        statusIndicator?.let { iv ->
+            val params = iv.layoutParams as? FrameLayout.LayoutParams
+            if (params != null) {
+                params.gravity = Gravity.TOP or Gravity.END
+                params.width = 18
+                params.height = 18
+                iv.layoutParams = params
+                iv.alpha = 0.7f
+            }
+        }
+    }
+
+    /**
+     * Center the status icon (connecting/disconnected state).
+     */
+    private fun centerStatusIcon() {
+        statusIndicator?.let { iv ->
+            val params = iv.layoutParams as? FrameLayout.LayoutParams
+            if (params != null) {
+                params.gravity = Gravity.CENTER
+                params.width = 24
+                params.height = 24
+                iv.layoutParams = params
+                iv.alpha = 1.0f
             }
         }
     }

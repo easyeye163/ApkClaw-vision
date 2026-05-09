@@ -300,18 +300,42 @@ object DirectWebRTCManager {
 
     /**
      * Handle webrtc_offer - create PeerConnection, set remote, create answer.
+     * CRITICAL: Must wait for setRemoteDescription to complete before createAnswer,
+     * otherwise the answer will be malformed and no video track will be negotiated.
      */
     private fun handleWebrtcOffer(json: JsonObject) {
         val sdpStr = json.get("sdp")?.asString ?: return
         Log.d(TAG, "Received WebRTC offer (${sdpStr.length} chars)")
 
+        // Debug: log whether the offer contains video media
+        val hasVideoMline = sdpStr.contains("m=video")
+        val hasAudioMline = sdpStr.contains("m=audio")
+        Log.d(TAG, "Offer contains: audio=$hasAudioMline, video=$hasVideoMline")
+        if (!hasVideoMline) {
+            Log.w(TAG, "WARNING: SDP offer does NOT contain video media line! Server may not support video.")
+        }
+
         mainHandler.post {
             try {
                 createPeerConnection()
 
-                // Set remote description (offer)
+                // Set remote description (offer) - MUST complete before creating answer
                 val sdp = SessionDescription(SessionDescription.Type.OFFER, sdpStr)
-                peerConnection?.setRemoteDescription(SimpleSdpObserver(), sdp)
+                peerConnection?.setRemoteDescription(object : SdpObserver {
+                    override fun onCreateSuccess(sdp: SessionDescription?) {}
+                    override fun onSetSuccess() {
+                        Log.d(TAG, "setRemoteDescription completed successfully")
+                        // Only create answer AFTER setRemote is done
+                        createAndSendAnswer()
+                    }
+                    override fun onCreateFailure(error: String?) {
+                        Log.e(TAG, "setRemoteDescription onCreateFailure: $error")
+                    }
+                    override fun onSetFailure(error: String?) {
+                        Log.e(TAG, "setRemoteDescription FAILED: $error")
+                        _connectionState.value = ConnectionState.ERROR
+                    }
+                }, sdp)
 
                 signalingReady = true
 
@@ -321,30 +345,57 @@ object DirectWebRTCManager {
                 }
                 pendingIceCandidates.clear()
 
-                // Create answer
-                val constraints = MediaConstraints()
-                constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
-                constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
-
-                peerConnection?.createAnswer(object : SdpObserver {
-                    override fun onCreateSuccess(sdp: SessionDescription?) {
-                        if (sdp == null) return
-                        peerConnection?.setLocalDescription(SimpleSdpObserver(), sdp)
-                        sendWsMessage(mapOf("type" to "webrtc_answer", "sdp" to sdp.description))
-                        Log.d(TAG, "WebRTC answer sent")
-                    }
-                    override fun onSetSuccess() {}
-                    override fun onCreateFailure(error: String?) {
-                        Log.e(TAG, "Create answer failed: $error")
-                        _connectionState.value = ConnectionState.ERROR
-                    }
-                    override fun onSetFailure(error: String?) {}
-                }, constraints)
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error handling WebRTC offer", e)
                 _connectionState.value = ConnectionState.ERROR
             }
+        }
+    }
+
+    /**
+     * Create SDP answer and send it to the server.
+     * Must be called AFTER setRemoteDescription has completed.
+     */
+    private fun createAndSendAnswer() {
+        try {
+            val constraints = MediaConstraints()
+            constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
+            constraints.mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
+
+            peerConnection?.createAnswer(object : SdpObserver {
+                override fun onCreateSuccess(sdp: SessionDescription?) {
+                    if (sdp == null) {
+                        Log.e(TAG, "createAnswer returned null SDP")
+                        _connectionState.value = ConnectionState.ERROR
+                        return
+                    }
+                    // Debug: log answer content
+                    val answerHasVideo = sdp.description?.contains("m=video") == true
+                    Log.d(TAG, "Answer created (has video: $answerHasVideo)")
+
+                    peerConnection?.setLocalDescription(object : SdpObserver {
+                        override fun onCreateSuccess(sdp: SessionDescription?) {}
+                        override fun onSetSuccess() {
+                            Log.d(TAG, "setLocalDescription completed")
+                        }
+                        override fun onCreateFailure(error: String?) {}
+                        override fun onSetFailure(error: String?) {
+                            Log.e(TAG, "setLocalDescription FAILED: $error")
+                        }
+                    }, sdp)
+                    sendWsMessage(mapOf("type" to "webrtc_answer", "sdp" to sdp.description))
+                    Log.d(TAG, "WebRTC answer sent")
+                }
+                override fun onSetSuccess() {}
+                override fun onCreateFailure(error: String?) {
+                    Log.e(TAG, "Create answer failed: $error")
+                    _connectionState.value = ConnectionState.ERROR
+                }
+                override fun onSetFailure(error: String?) {}
+            }, constraints)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating answer", e)
+            _connectionState.value = ConnectionState.ERROR
         }
     }
 
@@ -376,10 +427,13 @@ object DirectWebRTCManager {
                     PeerConnection.IceConnectionState.CONNECTED,
                     PeerConnection.IceConnectionState.COMPLETED -> {
                         _connectionState.value = ConnectionState.CONNECTED
+                        startStatsMonitor()
                     }
                     PeerConnection.IceConnectionState.FAILED,
                     PeerConnection.IceConnectionState.DISCONNECTED -> {
                         _connectionState.value = ConnectionState.ERROR
+                        statsMonitorJob?.cancel()
+                        statsMonitorJob = null
                     }
                     PeerConnection.IceConnectionState.NEW,
                     PeerConnection.IceConnectionState.CHECKING -> {
@@ -419,12 +473,22 @@ object DirectWebRTCManager {
             override fun onRenegotiationNeeded() {}
 
             override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
+                Log.d(TAG, "onAddTrack called: receiver=$receiver, streams count=${streams?.size ?: 0}")
                 // In Unified Plan, streams may be empty - get track from receiver
                 val track = receiver?.track()
+                Log.d(TAG, "onAddTrack track: $track (type=${track?.kind()})")
                 if (track is VideoTrack) {
                     remoteVideoTrack = track
-                    Log.d(TAG, "Remote video track received via receiver")
-                    mainHandler.post { attachRenderer() }
+                    Log.d(TAG, "Remote video track received via receiver (enabled=${track.enabled()})")
+                    mainHandler.post {
+                        attachRenderer()
+                        // Notify avatar that video is flowing
+                        _avatarStatus.value = AvatarStatus.PROCESSING
+                    }
+                    return
+                }
+                if (track is org.webrtc.AudioTrack) {
+                    Log.d(TAG, "Remote audio track received via receiver")
                     return
                 }
                 // Fallback: check streams array (Plan B compatibility)
@@ -432,8 +496,11 @@ object DirectWebRTCManager {
                     stream.videoTracks?.forEach { vt ->
                         if (vt is VideoTrack && remoteVideoTrack == null) {
                             remoteVideoTrack = vt
-                            Log.d(TAG, "Remote video track received via stream")
-                            mainHandler.post { attachRenderer() }
+                            Log.d(TAG, "Remote video track received via stream (enabled=${vt.enabled()})")
+                            mainHandler.post {
+                                attachRenderer()
+                                _avatarStatus.value = AvatarStatus.PROCESSING
+                            }
                         }
                     }
                 }
@@ -629,6 +696,10 @@ object DirectWebRTCManager {
         signalingReady = false
         pendingIceCandidates.clear()
 
+        // Cancel stats monitor
+        statsMonitorJob?.cancel()
+        statsMonitorJob = null
+
         // Remove sink but do NOT unbind/release the renderer
         try {
             remoteVideoTrack?.removeSink(videoRenderer)
@@ -711,7 +782,45 @@ object DirectWebRTCManager {
     }
 
     /**
-     * Simple SdpObserver with no-op callbacks.
+     * Periodically log ICE/track stats for debugging video flow.
+     */
+    private fun startStatsMonitor() {
+        statsMonitorJob?.cancel()
+        statsMonitorJob = CoroutineScope(Dispatchers.IO).launch {
+            kotlinx.coroutines.delay(10000)
+            while (true) {
+                try {
+                    val pc = peerConnection ?: break
+                    pc.getStats { report ->
+                        var videoBytes = 0L
+                        var audioBytes = 0L
+                        for (stat in report.statsMap.values) {
+                            if (stat.type == "inbound-rtp") {
+                                val kind = stat.members["kind"]?.toString()
+                                val bytes = stat.members["bytesReceived"]?.toString()?.toLongOrNull() ?: 0L
+                                if (kind == "video") videoBytes += bytes
+                                else if (kind == "audio") audioBytes += bytes
+                            }
+                        }
+                        if (videoBytes > 0 || audioBytes > 0) {
+                            Log.d(TAG, "Stats: video bytes=$videoBytes, audio bytes=$audioBytes")
+                        }
+                        if (videoBytes == 0L && _connectionState.value == ConnectionState.CONNECTED) {
+                            Log.w(TAG, "Stats: NO video bytes received despite being connected")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error getting stats", e)
+                }
+                kotlinx.coroutines.delay(10000)
+            }
+        }
+    }
+
+    private var statsMonitorJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Simple SdpObserver with logging callbacks.
      */
     private class SimpleSdpObserver : SdpObserver {
         override fun onCreateSuccess(sdp: SessionDescription?) {}
