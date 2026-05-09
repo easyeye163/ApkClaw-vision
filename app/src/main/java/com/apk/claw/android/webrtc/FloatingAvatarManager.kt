@@ -60,9 +60,14 @@ object FloatingAvatarManager {
 
         if (avatarView != null) return
 
-        if (!KVUtils.isWebRTCEnabled() || !KVUtils.hasCyberVerseConfig()) {
-            Log.d(TAG, "WebRTC not enabled or no config, skip showing avatar")
+        if (!KVUtils.hasCyberVerseConfig()) {
+            Log.d(TAG, "No CyberVerse config, skip showing avatar")
             return
+        }
+
+        // Ensure WebRTC is enabled when user explicitly opens avatar
+        if (!KVUtils.isWebRTCEnabled()) {
+            KVUtils.setWebRTCEnabled(true)
         }
 
         val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -145,6 +150,12 @@ object FloatingAvatarManager {
 
         // Observe connection state and avatar status
         observeState()
+
+        // Trigger WebRTC connection if not already connected
+        if (DirectWebRTCManager.connectionState.value == DirectWebRTCManager.ConnectionState.DISCONNECTED) {
+            Log.d(TAG, "Triggering WebRTC connection...")
+            DirectWebRTCManager.connect()
+        }
 
         Log.d(TAG, "Floating avatar shown")
     }
