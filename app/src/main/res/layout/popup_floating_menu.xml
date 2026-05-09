@@ -34,4 +34,18 @@
         android:drawablePadding="10dp"
         android:background="@drawable/bg_popup_menu_item" />
 
+    <TextView
+        android:id="@+id/tvMenuToggleAvatar"
+        android:layout_width="136dp"
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:text="@string/floating_menu_toggle_avatar"
+        android:textColor="#E0FFFFFF"
+        android:textSize="14sp"
+        android:drawableStart="@drawable/ic_avatar_connecting"
+        android:drawablePadding="10dp"
+        android:background="@drawable/bg_popup_menu_item" />
+
 </LinearLayout>

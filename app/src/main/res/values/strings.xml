@@ -349,6 +349,7 @@
     <!-- Floating Menu -->
     <string name="floating_menu_chat">Local Chat</string>
     <string name="floating_menu_analyze_screen">Analyze Screen</string>
+    <string name="floating_menu_toggle_avatar">Digital Avatar</string>
     <string name="screenshot_saved">Screenshot saved</string>
     <string name="screenshot_failed">Failed to take screenshot</string>
     <string name="describe_screenshot">Please describe the content of this screenshot</string>

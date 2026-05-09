@@ -22,6 +22,7 @@ import com.apk.claw.android.floating.reasoning.FloatingReasoningPanel
 import com.apk.claw.android.service.ClawAccessibilityService
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
+import com.apk.claw.android.webrtc.FloatingAvatarManager
 import com.blankj.utilcode.util.BarUtils
 import com.lzf.easyfloat.EasyFloat
 import com.lzf.easyfloat.enums.ShowPattern
@@ -231,6 +232,16 @@ object FloatingCircleManager {
         popupView.findViewById<TextView>(R.id.tvMenuAnalyzeScreen)?.setOnClickListener {
             dismissPopupMenu()
             takeScreenshotAndAnalyze()
+        }
+
+        // "数字人" toggle option
+        popupView.findViewById<TextView>(R.id.tvMenuToggleAvatar)?.setOnClickListener {
+            dismissPopupMenu()
+            try {
+                FloatingAvatarManager.toggle()
+            } catch (e: Exception) {
+                XLog.e(TAG, "Error toggling avatar", e)
+            }
         }
 
         // Measure popup to get dimensions

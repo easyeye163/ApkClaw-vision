@@ -341,6 +341,7 @@
     <!-- 悬浮菜单 -->
     <string name="floating_menu_chat">本地对话</string>
     <string name="floating_menu_analyze_screen">分析屏幕</string>
+    <string name="floating_menu_toggle_avatar">数字人</string>
     <string name="screenshot_saved">截图已保存</string>
     <string name="screenshot_failed">截图失败</string>
     <string name="describe_screenshot">请描述这张截图的内容</string>

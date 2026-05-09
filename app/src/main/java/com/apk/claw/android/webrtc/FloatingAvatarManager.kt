@@ -11,6 +11,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
+import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
 import com.apk.claw.android.utils.KVUtils
 import org.webrtc.SurfaceViewRenderer
@@ -20,23 +21,22 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
- * Floating avatar window manager.
- * Shows a small draggable overlay with the WebRTC video renderer for digital avatar.
- * Works with both DirectWebRTCManager and (legacy) LiveKitRoomManager.
+ * Floating avatar window manager (singleton).
+ * Shows a small draggable overlay (120dp circle) with the WebRTC video renderer for digital avatar.
+ * Auto-shows when WebRTC is enabled and has config, auto-hides when disabled.
  */
-class FloatingAvatarManager(private val context: Context) {
+object FloatingAvatarManager {
 
-    companion object {
-        private const val TAG = "FloatingAvatarManager"
-        private const val PREF_X = "floating_avatar_x"
-        private const val PREF_Y = "floating_avatar_y"
-        private val AVATAR_SIZE_DP = 120
-    }
+    private const val TAG = "FloatingAvatarManager"
+    private const val PREF_X = "floating_avatar_x"
+    private const val PREF_Y = "floating_avatar_y"
+    private val AVATAR_SIZE_DP = 120
 
-    private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private var windowManager: WindowManager? = null
     private var avatarView: View? = null
     private var renderer: SurfaceViewRenderer? = null
     private var statusIndicator: ImageView? = null
+    private var speakingIndicator: View? = null
 
     private var isDragging = false
     private var initialX = 0
@@ -44,31 +44,44 @@ class FloatingAvatarManager(private val context: Context) {
     private var initialTouchX = 0f
     private var initialTouchY = 0f
 
-    private var observeJob: Job? = null
+    private var observeConnectionJob: Job? = null
+    private var observeAvatarStatusJob: Job? = null
+
+    private var appContext: Context? = null
 
     /**
      * Show the floating avatar window.
+     * Must be called from main thread.
      */
+    @JvmStatic
     fun show() {
+        val ctx = appContext ?: ClawApplication.instance
+        appContext = ctx
+
         if (avatarView != null) return
 
-        val sizePx = (AVATAR_SIZE_DP * context.resources.displayMetrics.density).toInt()
+        if (!KVUtils.isWebRTCEnabled() || !KVUtils.hasCyberVerseConfig()) {
+            Log.d(TAG, "WebRTC not enabled or no config, skip showing avatar")
+            return
+        }
+
+        val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        windowManager = wm
+
+        val sizePx = (AVATAR_SIZE_DP * ctx.resources.displayMetrics.density).toInt()
 
         // Create the video renderer (org.webrtc.SurfaceViewRenderer)
-        renderer = SurfaceViewRenderer(context).apply {
+        renderer = SurfaceViewRenderer(ctx).apply {
             setZOrderMediaOverlay(true)
         }
 
-        // Create container layout
-        val container = FrameLayout(context).apply {
-            layoutParams = FrameLayout.LayoutParams(sizePx, sizePx)
-        }
-
         // Inflate the avatar overlay layout
-        val inflater = LayoutInflater.from(context)
-        avatarView = inflater.inflate(R.layout.layout_floating_avatar, container, false).also { view ->
-            view.findViewById<FrameLayout>(R.id.avatarVideoContainer)?.addView(renderer)
+        val inflater = LayoutInflater.from(ctx)
+        avatarView = inflater.inflate(R.layout.layout_floating_avatar, null).also { view ->
+            val container = view.findViewById<FrameLayout>(R.id.avatarVideoContainer)
+            container?.addView(renderer)
             statusIndicator = view.findViewById(R.id.ivAvatarStatus)
+            speakingIndicator = view.findViewById(R.id.speakingIndicator)
         }
 
         val params = createWindowParams(sizePx)
@@ -100,7 +113,11 @@ class FloatingAvatarManager(private val context: Context) {
                     }
                     params.x = initialX + dx.toInt()
                     params.y = initialY + dy.toInt()
-                    windowManager.updateViewLayout(avatarView, params)
+                    try {
+                        windowManager?.updateViewLayout(avatarView, params)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error updating avatar position", e)
+                    }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -115,12 +132,18 @@ class FloatingAvatarManager(private val context: Context) {
             }
         }
 
-        windowManager.addView(avatarView, params)
+        try {
+            wm.addView(avatarView, params)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding avatar view to WindowManager", e)
+            avatarView = null
+            return
+        }
 
         // Bind the renderer to DirectWebRTCManager
         renderer?.let { DirectWebRTCManager.bindRenderer(it) }
 
-        // Observe connection state
+        // Observe connection state and avatar status
         observeState()
 
         Log.d(TAG, "Floating avatar shown")
@@ -129,15 +152,18 @@ class FloatingAvatarManager(private val context: Context) {
     /**
      * Hide the floating avatar window.
      */
+    @JvmStatic
     fun hide() {
-        observeJob?.cancel()
-        observeJob = null
+        observeConnectionJob?.cancel()
+        observeConnectionJob = null
+        observeAvatarStatusJob?.cancel()
+        observeAvatarStatusJob = null
 
         DirectWebRTCManager.unbindRenderer()
 
         avatarView?.let {
             try {
-                windowManager.removeView(it)
+                windowManager?.removeView(it)
             } catch (e: Exception) {
                 Log.w(TAG, "Error removing avatar view", e)
             }
@@ -145,13 +171,27 @@ class FloatingAvatarManager(private val context: Context) {
         avatarView = null
         renderer = null
         statusIndicator = null
+        speakingIndicator = null
         Log.d(TAG, "Floating avatar hidden")
     }
 
     /**
      * Check if avatar is currently showing.
      */
+    @JvmStatic
     fun isShowing(): Boolean = avatarView != null
+
+    /**
+     * Toggle avatar visibility.
+     */
+    @JvmStatic
+    fun toggle() {
+        if (isShowing()) {
+            hide()
+        } else {
+            show()
+        }
+    }
 
     private fun createWindowParams(sizePx: Int): WindowManager.LayoutParams {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -170,12 +210,12 @@ class FloatingAvatarManager(private val context: Context) {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = 0
-            y = 200
+            y = 300
         }
     }
 
     private fun observeState() {
-        observeJob = CoroutineScope(Dispatchers.Main).launch {
+        observeConnectionJob = CoroutineScope(Dispatchers.Main).launch {
             DirectWebRTCManager.connectionState.collect { state ->
                 when (state) {
                     DirectWebRTCManager.ConnectionState.CONNECTING -> {
@@ -192,6 +232,22 @@ class FloatingAvatarManager(private val context: Context) {
                     DirectWebRTCManager.ConnectionState.DISCONNECTED -> {
                         statusIndicator?.visibility = View.VISIBLE
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_disconnected)
+                    }
+                }
+            }
+        }
+
+        observeAvatarStatusJob = CoroutineScope(Dispatchers.Main).launch {
+            DirectWebRTCManager.avatarStatus.collect { status ->
+                when (status) {
+                    DirectWebRTCManager.AvatarStatus.SPEAKING -> {
+                        speakingIndicator?.visibility = View.VISIBLE
+                    }
+                    DirectWebRTCManager.AvatarStatus.PROCESSING -> {
+                        speakingIndicator?.visibility = View.VISIBLE
+                    }
+                    DirectWebRTCManager.AvatarStatus.IDLE -> {
+                        speakingIndicator?.visibility = View.GONE
                     }
                 }
             }

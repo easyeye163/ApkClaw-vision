@@ -61,6 +61,7 @@ object DirectWebRTCManager {
     private var localAudioTrack: AudioTrack? = null
     private var webSocket: WebSocket? = null
     private var sessionId: String? = null
+    private var eglBase: EglBase? = null
 
     private val gson = Gson()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -482,19 +483,33 @@ object DirectWebRTCManager {
     }
 
     /**
+     * Get or create the shared EglBase instance.
+     */
+    fun getEglBase(): EglBase? {
+        if (eglBase == null) {
+            try {
+                eglBase = EglBase.create()
+                Log.d(TAG, "EglBase created")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create EglBase", e)
+            }
+        }
+        return eglBase
+    }
+
+    /**
      * Bind a SurfaceViewRenderer to display the remote avatar video.
      */
     fun bindRenderer(renderer: SurfaceViewRenderer) {
         videoRenderer = renderer
         try {
-            val eglBase = peerConnectionFactory?.let { f ->
-                EglBase.create()
+            val egl = getEglBase()
+            if (egl != null) {
+                renderer.init(egl.eglBaseContext, null)
+                renderer.setMirror(false)
             }
-            if (eglBase != null) {
-                renderer.init(eglBase.eglBaseContext, null)
-            }
-        } catch (_: Exception) {
-            // EGL might already be initialized
+        } catch (e: Exception) {
+            Log.w(TAG, "Error initializing renderer", e)
         }
         attachRenderer()
     }
@@ -572,6 +587,11 @@ object DirectWebRTCManager {
         peerConnection = null
 
         unbindRenderer()
+
+        try {
+            eglBase?.release()
+        } catch (_: Exception) {}
+        eglBase = null
 
         _connectionState.value = ConnectionState.DISCONNECTED
         _avatarStatus.value = AvatarStatus.IDLE
