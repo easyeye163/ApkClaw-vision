@@ -32,6 +32,15 @@
             android:textSize="11sp" />
 
         <TextView
+            android:id="@+id/tvConnectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorTextHint"
+            android:textSize="10sp"
+            android:layout_marginEnd="8pt"
+            android:visibility="gone" />
+
+        <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="云端模式"

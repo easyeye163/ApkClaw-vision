@@ -42,6 +42,11 @@ import java.io.File
 import java.util.Base64
 import android.widget.Switch
 import android.widget.CompoundButton
+import com.apk.claw.android.webrtc.DirectWebRTCManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 class ChatActivity : BaseActivity() {
 
@@ -109,6 +114,7 @@ class ChatActivity : BaseActivity() {
     private lateinit var btnRemovePreview: ImageView
     private lateinit var btnVoice: ImageView
     private lateinit var switchCloudMode: Switch
+    private lateinit var tvConnectionStatus: android.widget.TextView
     private var speechRecognizer: SpeechRecognizer? = null
     private var isListening = false
     private lateinit var adapter: ChatAdapter
@@ -241,6 +247,7 @@ class ChatActivity : BaseActivity() {
             requestNotificationPermission()
             CloudChatManager.setPushListener(pushListener)
             CloudChatManager.connectForPush()
+            startObservingConnectionState()
         }
     }
 
@@ -253,6 +260,7 @@ class ChatActivity : BaseActivity() {
         super.onStop()
         // Activity 不可见时注销推送监听（通知仍由 CloudChatManager 发送）
         CloudChatManager.setPushListener(null)
+        stopObservingConnectionState()
     }
 
     override fun onDestroy() {
@@ -349,9 +357,12 @@ class ChatActivity : BaseActivity() {
                 requestNotificationPermission()
                 CloudChatManager.setPushListener(pushListener)
                 CloudChatManager.connectForPush()
+                startObservingConnectionState()
             } else {
                 // 关闭云端模式：断开连接
                 CloudChatManager.disconnect()
+                stopObservingConnectionState()
+                tvConnectionStatus.visibility = android.view.View.GONE
             }
         }
         updateModeHint()
@@ -369,6 +380,7 @@ class ChatActivity : BaseActivity() {
      * 更新模式提示（显示当前是本地模式还是云端模式）
      */
     private fun updateModeHint() {
+        tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
         val tvModeHint = findViewById<android.widget.TextView>(R.id.tvModeHint)
         if (switchCloudMode.isChecked) {
             tvModeHint.text = getString(R.string.chat_mode_cloud)
@@ -377,6 +389,44 @@ class ChatActivity : BaseActivity() {
             tvModeHint.text = getString(R.string.chat_mode_local)
             tvModeHint.visibility = View.VISIBLE
         }
+    }
+
+    /**
+     * Observe WebRTC connection state to show cloud chat connection status.
+     */
+    private var connectionObserverJob: kotlinx.coroutines.Job? = null
+
+    private fun startObservingConnectionState() {
+        tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
+        tvConnectionStatus.visibility = android.view.View.VISIBLE
+        connectionObserverJob = CoroutineScope(Dispatchers.Main).launch {
+            DirectWebRTCManager.connectionState.collect { state ->
+                    if (!switchCloudMode.isChecked) return@collect
+                    when (state) {
+                        DirectWebRTCManager.ConnectionState.CONNECTED -> {
+                            tvConnectionStatus.text = "\u2705 云端+数字人已连接"
+                            tvConnectionStatus.setTextColor(getColor(R.color.colorBrandPrimary))
+                        }
+                        DirectWebRTCManager.ConnectionState.CONNECTING -> {
+                            tvConnectionStatus.text = "\u23F3 连接中..."
+                            tvConnectionStatus.setTextColor(getColor(R.color.colorTextHint))
+                        }
+                        DirectWebRTCManager.ConnectionState.DISCONNECTED -> {
+                            tvConnectionStatus.text = "\u26A0 仅云端模式"
+                            tvConnectionStatus.setTextColor(getColor(R.color.colorTextHint))
+                        }
+                        DirectWebRTCManager.ConnectionState.ERROR -> {
+                            tvConnectionStatus.text = "\u274C 连接异常"
+                            tvConnectionStatus.setTextColor(getColor(R.color.colorErrorPrimary))
+                        }
+                    }
+                }
+        }
+    }
+
+    private fun stopObservingConnectionState() {
+        connectionObserverJob?.cancel()
+        connectionObserverJob = null
     }
 
     // ==================== Voice Input ====================

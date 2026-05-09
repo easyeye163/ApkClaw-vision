@@ -66,6 +66,30 @@ object DirectWebRTCManager {
     private val gson = Gson()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /**
+     * Listener for streaming text responses (transcript tokens).
+     * Used by CloudChatManager to display LLM responses when sharing the WebRTC session.
+     */
+    interface TextResponseListener {
+        fun onTranscriptToken(text: String, isFinal: Boolean)
+        fun onTextError(error: String)
+    }
+
+    private val textResponseListeners = mutableListOf<TextResponseListener>()
+
+    fun addTextResponseListener(listener: TextResponseListener) {
+        if (!textResponseListeners.contains(listener)) {
+            textResponseListeners.add(listener)
+        }
+    }
+
+    fun removeTextResponseListener(listener: TextResponseListener) {
+        textResponseListeners.remove(listener)
+    }
+
+    fun isConnectedAndReady(): Boolean =
+        webSocket != null && _connectionState.value == ConnectionState.CONNECTED
+
     // Serialized signaling chain - ensures operations happen in order
     private var signalingReady = false
     private val pendingIceCandidates = mutableListOf<JsonObject>()
@@ -492,13 +516,35 @@ object DirectWebRTCManager {
     }
 
     /**
-     * Handle transcript message (for future integration).
+     * Handle transcript message - accumulate tokens and notify listeners.
+     * { "type": "transcript", "speaker": "assistant", "text": "token", "is_final": false }
      */
+    private var transcriptAccumulator = StringBuilder()
+    private var transcriptSessionActive = false
+
     private fun handleTranscript(json: JsonObject) {
         val speaker = json.get("speaker")?.asString ?: return
         val text = json.get("text")?.asString ?: return
         val isFinal = json.get("is_final")?.asBoolean ?: false
         Log.d(TAG, "Transcript [$speaker${if (isFinal) "" else " (partial)"}]: $text")
+
+        if (speaker == "assistant" && textResponseListeners.isNotEmpty()) {
+            if (!transcriptSessionActive) {
+                transcriptAccumulator.clear()
+                transcriptSessionActive = true
+            }
+            transcriptAccumulator.append(text)
+            val accumulated = transcriptAccumulator.toString()
+            mainHandler.post {
+                for (listener in textResponseListeners) {
+                    listener.onTranscriptToken(accumulated, isFinal)
+                }
+            }
+            if (isFinal) {
+                transcriptSessionActive = false
+                transcriptAccumulator.clear()
+            }
+        }
     }
 
     /**
