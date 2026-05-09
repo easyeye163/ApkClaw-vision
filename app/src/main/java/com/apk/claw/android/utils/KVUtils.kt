@@ -208,10 +208,10 @@ object KVUtils {
     private const val KEY_CLOUD_CHAT_WS_URL = "KEY_CLOUD_CHAT_WS_URL"
     private const val KEY_CLOUD_CHAT_SESSION_ID = "KEY_CLOUD_CHAT_SESSION_ID"
 
-    fun isCloudChatEnabled(): Boolean = getBoolean(KEY_CLOUD_CHAT_ENABLED, false)
+    fun isCloudChatEnabled(): Boolean = getBoolean(KEY_CLOUD_CHAT_ENABLED, true)
     fun setCloudChatEnabled(enabled: Boolean) = putBoolean(KEY_CLOUD_CHAT_ENABLED, enabled)
 
-    fun getCloudChatWsUrl(): String = getString(KEY_CLOUD_CHAT_WS_URL, "")
+    fun getCloudChatWsUrl(): String = getString(KEY_CLOUD_CHAT_WS_URL, "ws://7110f985.r21.cpolar.top")
     fun setCloudChatWsUrl(value: String) = putString(KEY_CLOUD_CHAT_WS_URL, value)
 
     fun getCloudChatSessionId(): String = getString(KEY_CLOUD_CHAT_SESSION_ID, "")

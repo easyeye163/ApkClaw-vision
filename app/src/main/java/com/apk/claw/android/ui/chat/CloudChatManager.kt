@@ -24,11 +24,17 @@ import okio.ByteString
 import java.util.concurrent.TimeUnit
 
 /**
- * 云端对话模式 WebSocket 管理器
- * - 保持长连接，支持接收服务端主动推送
- * - 收到 type=text/llm 视为对话回复完成
- * - 收到 type=push 视为主动推送，通知监听器 + 系统通知
- * - 连接断开后自动重连
+ * 云端对话模式 WebSocket 管理器（兼容 CyberVerse 协议）
+ *
+ * 发送: { "type": "text_input", "text": "..." }
+ * 接收:
+ *   - llm_token: 流式 LLM 响应，{ "accumulated": "...", "is_final": bool }
+ *   - avatar_status: 数字人状态，{ "status": "idle"|"speaking"|"processing" }
+ *   - text / llm: 完整响应（兼容旧协议）
+ *   - push: 主动推送
+ *   - error: 错误
+ *
+ * WebSocket URL 格式: baseUrl/ws/chat/{sessionId}（CyberVerse 格式）
  */
 object CloudChatManager {
 
@@ -44,6 +50,9 @@ object CloudChatManager {
     private var isConnected = false
     private var currentCallback: ChatActivity.ChatCallback? = null
     private var pushListener: PushListener? = null
+
+    // Accumulated LLM response for streaming
+    private var accumulatedText = StringBuilder()
 
     // 自动重连（指数退避：2s→4s→8s→...→60s，最多 10 次）
     private var shouldReconnect = false
@@ -72,12 +81,35 @@ object CloudChatManager {
     }
 
     /**
+     * Build full WebSocket URL from base URL + session ID (CyberVerse format).
+     * Base: ws://7110f985.r21.cpolar.top → ws://7110f985.r21.cpolar.top/ws/chat/{sessionId}
+     */
+    private fun buildWsUrl(): String {
+        val baseUrl = KVUtils.getCloudChatWsUrl().trim()
+        if (baseUrl.isEmpty()) return ""
+
+        val sessionId = KVUtils.getCloudChatSessionId().ifEmpty {
+            "android_${System.currentTimeMillis()}".also {
+                KVUtils.setCloudChatSessionId(it)
+                XLog.i(TAG, "Generated new session ID: $it")
+            }
+        }
+
+        // If URL already has a path (e.g. ws://host/ws/chat/xxx), use as-is
+        if (baseUrl.contains("/ws/")) return baseUrl
+
+        // Append CyberVerse-style path: /ws/chat/{sessionId}
+        val base = baseUrl.trimEnd('/')
+        return "$base/ws/chat/$sessionId"
+    }
+
+    /**
      * 仅建立 WebSocket 长连接（不发送消息）
      */
     fun connect(context: Context) {
-        val wsUrl = KVUtils.getCloudChatWsUrl().trim()
-        if (wsUrl.isEmpty()) return
         if (isConnected) return
+        val wsUrl = buildWsUrl()
+        if (wsUrl.isEmpty()) return
 
         shouldReconnect = true
         reconnectAttempts = 0
@@ -85,17 +117,16 @@ object CloudChatManager {
     }
 
     /**
-     * 进入聊天界面时自动建立长连接（专用方法，语义更清晰）
-     * 与 connect() 行为一致，独立调用便于区分用途
+     * 进入聊天界面时自动建立长连接
      */
     fun connectForPush() {
-        val wsUrl = KVUtils.getCloudChatWsUrl().trim()
-        if (wsUrl.isEmpty()) return
         if (isConnected) return
+        val wsUrl = buildWsUrl()
+        if (wsUrl.isEmpty()) return
 
         shouldReconnect = true
         reconnectAttempts = 0
-        XLog.i(TAG, "connectForPush: establishing long connection for push reception")
+        XLog.i(TAG, "connectForPush: $wsUrl")
         doConnect(wsUrl, null)
     }
 
@@ -103,13 +134,14 @@ object CloudChatManager {
      * 发送文本消息到云端 WebSocket
      */
     fun sendMessage(text: String, callback: ChatActivity.ChatCallback) {
-        val wsUrl = KVUtils.getCloudChatWsUrl().trim()
+        val wsUrl = buildWsUrl()
         if (wsUrl.isEmpty()) {
             callback.onError("未配置云端对话 WebSocket 地址")
             return
         }
 
         currentCallback = callback
+        accumulatedText.clear()
 
         if (isConnected) {
             sendTextMessage(text)
@@ -190,7 +222,7 @@ object CloudChatManager {
 
         reconnectHandler.postDelayed({
             if (shouldReconnect && !isConnected) {
-                val wsUrl = KVUtils.getCloudChatWsUrl().trim()
+                val wsUrl = buildWsUrl()
                 if (wsUrl.isNotEmpty()) {
                     doConnect(wsUrl, null)
                 }
@@ -199,18 +231,11 @@ object CloudChatManager {
     }
 
     /**
-     * 发送文本消息
+     * 发送文本消息（CyberVerse text_input 格式）
      */
     private fun sendTextMessage(text: String) {
-        val sessionId = KVUtils.getCloudChatSessionId().ifEmpty {
-            "android_${System.currentTimeMillis()}".also {
-                KVUtils.setCloudChatSessionId(it)
-            }
-        }
-
         val message = JsonObject().apply {
-            addProperty("type", "text")
-            addProperty("session_id", sessionId)
+            addProperty("type", "text_input")
             addProperty("text", text)
         }
 
@@ -234,48 +259,124 @@ object CloudChatManager {
             val type = json.get("type")?.asString ?: ""
 
             when (type) {
-                "text", "llm" -> {
-                    val responseText = json.get("text")?.asString ?: ""
-                    val answer = json.get("answer")?.asString ?: ""
-                    val content = responseText.ifEmpty { answer }
-                    if (content.isNotEmpty()) {
-                        mainHandler.post {
-                            currentCallback?.onProgress(content)
-                            currentCallback?.onComplete(content)
-                            currentCallback = null
-                        }
-                    }
-                }
-                "push" -> {
-                    val pushText = json.get("text")?.asString ?: ""
-                    if (pushText.isNotEmpty()) {
-                        XLog.i(TAG, "Push received: $pushText")
-                        mainHandler.post {
-                            pushListener?.onPushMessage(pushText)
-                        }
-                        showPushNotification(pushText)
-                    }
-                }
-                "error" -> {
-                    val errorMsg = json.get("message")?.asString
-                        ?: json.get("error")?.asString
-                        ?: "未知错误"
-                    mainHandler.post {
-                        currentCallback?.onError(errorMsg)
-                        currentCallback = null
-                    }
+                // CyberVerse streaming LLM token
+                "llm_token" -> handleLlmToken(json)
+                // CyberVerse avatar status
+                "avatar_status" -> handleAvatarStatus(json)
+                // Legacy: complete text response
+                "text", "llm" -> handleTextResponse(json)
+                // Push notification from server
+                "push" -> handlePush(json)
+                // Error
+                "error" -> handleError(json)
+                // WebRTC signaling messages (ignore in chat manager)
+                "webrtc_config", "webrtc_offer", "ice_candidate" -> {
+                    XLog.d(TAG, "Ignoring signaling message: $type")
                 }
                 else -> {
-                    XLog.d(TAG, "Ignoring message type: $type")
+                    // Fallback: treat unknown messages as plain text response
+                    XLog.d(TAG, "Unknown message type: $type, treating as text")
+                    mainHandler.post {
+                        currentCallback?.onProgress(text)
+                        currentCallback?.onComplete(text)
+                        currentCallback = null
+                    }
                 }
             }
         } catch (e: Exception) {
             XLog.e(TAG, "Failed to parse message", e)
+            // Fallback: treat raw text as response
             mainHandler.post {
                 currentCallback?.onProgress(text)
                 currentCallback?.onComplete(text)
                 currentCallback = null
             }
+        }
+    }
+
+    /**
+     * Handle llm_token: CyberVerse streaming LLM response.
+     * { "type": "llm_token", "accumulated": "full text so far", "is_final": false }
+     */
+    private fun handleLlmToken(json: JsonObject) {
+        val accumulated = json.get("accumulated")?.asString ?: ""
+        val isFinal = json.get("is_final")?.asBoolean ?: false
+        val token = json.get("token")?.asString ?: ""
+
+        if (accumulated.isNotEmpty()) {
+            // Use accumulated text for display
+            mainHandler.post {
+                currentCallback?.onProgress(accumulated)
+                if (isFinal) {
+                    currentCallback?.onComplete(accumulated)
+                    currentCallback = null
+                }
+            }
+        } else if (token.isNotEmpty()) {
+            // Append token to buffer, show accumulated
+            accumulatedText.append(token)
+            mainHandler.post {
+                currentCallback?.onProgress(accumulatedText.toString())
+                if (isFinal) {
+                    currentCallback?.onComplete(accumulatedText.toString())
+                    currentCallback = null
+                    accumulatedText.clear()
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle avatar_status: CyberVerse digital avatar state update.
+     * { "type": "avatar_status", "status": "idle"|"speaking"|"processing" }
+     */
+    private fun handleAvatarStatus(json: JsonObject) {
+        val status = json.get("status")?.asString ?: ""
+        XLog.d(TAG, "Avatar status: $status")
+        // Forward to DirectWebRTCManager if needed
+        // For now, just log — the floating avatar observes its own connection state
+    }
+
+    /**
+     * Handle legacy text/llm response.
+     */
+    private fun handleTextResponse(json: JsonObject) {
+        val responseText = json.get("text")?.asString ?: ""
+        val answer = json.get("answer")?.asString ?: ""
+        val content = responseText.ifEmpty { answer }
+        if (content.isNotEmpty()) {
+            mainHandler.post {
+                currentCallback?.onProgress(content)
+                currentCallback?.onComplete(content)
+                currentCallback = null
+            }
+        }
+    }
+
+    /**
+     * Handle push notification.
+     */
+    private fun handlePush(json: JsonObject) {
+        val pushText = json.get("text")?.asString ?: ""
+        if (pushText.isNotEmpty()) {
+            XLog.i(TAG, "Push received: $pushText")
+            mainHandler.post {
+                pushListener?.onPushMessage(pushText)
+            }
+            showPushNotification(pushText)
+        }
+    }
+
+    /**
+     * Handle error response.
+     */
+    private fun handleError(json: JsonObject) {
+        val errorMsg = json.get("message")?.asString
+            ?: json.get("error")?.asString
+            ?: "未知错误"
+        mainHandler.post {
+            currentCallback?.onError(errorMsg)
+            currentCallback = null
         }
     }
 
@@ -328,6 +429,7 @@ object CloudChatManager {
         shouldReconnect = false
         reconnectHandler.removeCallbacksAndMessages(null)
         reconnectAttempts = 0
+        accumulatedText.clear()
         try {
             webSocket?.close(1000, "User disconnect")
         } catch (_: Exception) {}
