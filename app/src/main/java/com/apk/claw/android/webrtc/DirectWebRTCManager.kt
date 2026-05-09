@@ -88,12 +88,22 @@ object DirectWebRTCManager {
                 .createInitializationOptions()
             PeerConnectionFactory.initialize(initializationOptions)
 
+            // Create EglBase early - shared by decoder factory and renderers
+            eglBase = EglBase.create()
+            val eglBaseContext = eglBase!!.eglBaseContext
+
+            // Video decoder/encoder factories are REQUIRED for receiving/sending video
+            val videoDecoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
+            val videoEncoderFactory = DefaultVideoEncoderFactory(eglBaseContext, false, true)
+
             val options = PeerConnectionFactory.Options()
             peerConnectionFactory = PeerConnectionFactory.builder()
                 .setOptions(options)
+                .setVideoDecoderFactory(videoDecoderFactory)
+                .setVideoEncoderFactory(videoEncoderFactory)
                 .createPeerConnectionFactory()
 
-            Log.d(TAG, "DirectWebRTCManager initialized")
+            Log.d(TAG, "DirectWebRTCManager initialized (with video decoder/encoder)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to init WebRTC", e)
         }
@@ -406,12 +416,21 @@ object DirectWebRTCManager {
             override fun onRenegotiationNeeded() {}
 
             override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {
+                // In Unified Plan, streams may be empty - get track from receiver
+                val track = receiver?.track()
+                if (track is VideoTrack) {
+                    remoteVideoTrack = track
+                    Log.d(TAG, "Remote video track received via receiver")
+                    mainHandler.post { attachRenderer() }
+                    return
+                }
+                // Fallback: check streams array (Plan B compatibility)
                 streams?.forEach { stream ->
-                    stream.videoTracks?.forEach { track ->
-                        if (track is VideoTrack) {
-                            remoteVideoTrack = track
-                            Log.d(TAG, "Remote video track received")
-                            attachRenderer()
+                    stream.videoTracks?.forEach { vt ->
+                        if (vt is VideoTrack && remoteVideoTrack == null) {
+                            remoteVideoTrack = vt
+                            Log.d(TAG, "Remote video track received via stream")
+                            mainHandler.post { attachRenderer() }
                         }
                     }
                 }
@@ -483,13 +502,13 @@ object DirectWebRTCManager {
     }
 
     /**
-     * Get or create the shared EglBase instance.
+     * Get the shared EglBase instance (created during init).
      */
     fun getEglBase(): EglBase? {
         if (eglBase == null) {
             try {
                 eglBase = EglBase.create()
-                Log.d(TAG, "EglBase created")
+                Log.w(TAG, "EglBase created lazily (should have been created in init)")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to create EglBase", e)
             }
