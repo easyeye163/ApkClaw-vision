@@ -216,4 +216,20 @@ object KVUtils {
 
     fun getCloudChatSessionId(): String = getString(KEY_CLOUD_CHAT_SESSION_ID, "")
     fun setCloudChatSessionId(value: String) = putString(KEY_CLOUD_CHAT_SESSION_ID, value)
+
+    // ==================== CyberVerse / WebRTC 配置 ====================
+    private const val KEY_WEBRTC_ENABLED = "KEY_WEBRTC_ENABLED"
+    private const val KEY_WEBRTC_URL = "KEY_WEBRTC_URL"
+    private const val KEY_WEBRTC_TOKEN = "KEY_WEBRTC_TOKEN"
+
+    fun isWebRTCEnabled(): Boolean = getBoolean(KEY_WEBRTC_ENABLED, false)
+    fun setWebRTCEnabled(enabled: Boolean) = putBoolean(KEY_WEBRTC_ENABLED, enabled)
+
+    fun getWebRTCUrl(): String = getString(KEY_WEBRTC_URL, "")
+    fun setWebRTCUrl(value: String) = putString(KEY_WEBRTC_URL, value)
+
+    fun getWebRTCToken(): String = getString(KEY_WEBRTC_TOKEN, "")
+    fun setWebRTCToken(value: String) = putString(KEY_WEBRTC_TOKEN, value)
+
+    fun hasWebRTCConfig(): Boolean = getWebRTCUrl().isNotEmpty()
 }

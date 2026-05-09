@@ -3,11 +3,14 @@ package com.apk.claw.android.ui.chat
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.graphics.Bitmap
 import android.os.Build
-import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -104,7 +107,10 @@ class ChatActivity : BaseActivity() {
     private lateinit var btnCamera: ImageView
     private lateinit var ivPreview: ImageView
     private lateinit var btnRemovePreview: ImageView
+    private lateinit var btnVoice: ImageView
     private lateinit var switchCloudMode: Switch
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListening = false
     private lateinit var adapter: ChatAdapter
 
     private var selectedImageUri: Uri? = null
@@ -251,6 +257,7 @@ class ChatActivity : BaseActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        stopListening()
         CloudChatManager.disconnect()
     }
 
@@ -348,6 +355,8 @@ class ChatActivity : BaseActivity() {
             }
         }
         updateModeHint()
+        btnVoice = findViewById(R.id.btnVoice)
+        btnVoice.setOnClickListener { toggleVoiceInput() }
         btnRemovePreview.setOnClickListener {
             selectedImageUri = null
             selectedImageData = null
@@ -368,6 +377,114 @@ class ChatActivity : BaseActivity() {
             tvModeHint.text = getString(R.string.chat_mode_local)
             tvModeHint.visibility = View.VISIBLE
         }
+    }
+
+    // ==================== Voice Input ====================
+
+    private val voicePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startListening()
+        } else {
+            Toast.makeText(this, getString(R.string.voice_permission_required), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun toggleVoiceInput() {
+        if (isListening) {
+            stopListening()
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                return
+            }
+            startListening()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun startListening() {
+        if (isListening) return
+
+        try {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "zh-CN")
+                putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, "zh-CN,en-US")
+                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            }
+
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {
+                    isListening = true
+                    btnVoice.setImageResource(R.drawable.ic_mic_active)
+                    Toast.makeText(this@ChatActivity, getString(R.string.voice_listening), Toast.LENGTH_SHORT).show()
+                }
+
+                override fun onBeginningOfSpeech() {}
+
+                override fun onRmsChanged(rmsdB: Float) {}
+
+                override fun onBufferReceived(buffer: ByteArray?) {}
+
+                override fun onEndOfSpeech() {}
+
+                override fun onError(error: Int) {
+                    isListening = false
+                    btnVoice.setImageResource(R.drawable.ic_mic)
+                    val msg = when (error) {
+                        SpeechRecognizer.ERROR_NO_MATCH -> getString(R.string.voice_no_match)
+                        else -> getString(R.string.voice_error)
+                    }
+                    Toast.makeText(this@ChatActivity, msg, Toast.LENGTH_SHORT).show()
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                }
+
+                override fun onResults(results: Bundle?) {
+                    isListening = false
+                    btnVoice.setImageResource(R.drawable.ic_mic)
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        val text = matches[0]
+                        etMessage.setText(text)
+                        etMessage.setSelection(text.length)
+                        // Auto-send after recognition
+                        sendMessage()
+                    }
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                }
+
+                override fun onPartialResults(partialResults: Bundle?) {
+                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        etMessage.setText(matches[0])
+                    }
+                }
+
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+
+            speechRecognizer?.startListening(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, getString(R.string.voice_error), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopListening() {
+        isListening = false
+        btnVoice.setImageResource(R.drawable.ic_mic)
+        speechRecognizer?.stopListening()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
     }
 
     private fun loadChatHistory() {

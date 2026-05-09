@@ -54,7 +54,8 @@ class SettingsViewModel : ViewModel() {
             MenuAction.TELEGRAM.name to SettingValue.Text(ClawApplication.instance.getString(if (telegramBotToken) R.string.common_bound else R.string.common_unbound)),
             MenuAction.WECHAT.name to SettingValue.Text(ClawApplication.instance.getString(if (wechatBotToken) R.string.common_bound else R.string.common_unbound)),
             MenuAction.LAN_CONFIG.name to SettingValue.Text(getLanConfigTrailingText()),
-            MenuAction.CLOUD_CHAT.name to SettingValue.Text(if (KVUtils.getCloudChatWsUrl().isNotEmpty()) KVUtils.getCloudChatWsUrl() else ClawApplication.instance.getString(R.string.common_unconfigured))
+            MenuAction.CLOUD_CHAT.name to SettingValue.Text(if (KVUtils.getCloudChatWsUrl().isNotEmpty()) KVUtils.getCloudChatWsUrl() else ClawApplication.instance.getString(R.string.common_unconfigured)),
+            MenuAction.WEBRTC_CONFIG.name to SettingValue.Text(if (KVUtils.hasWebRTCConfig()) "LiveKit" else ClawApplication.instance.getString(R.string.common_unconfigured))
         )
         _settingItems.value = map
     }
@@ -305,6 +306,7 @@ class SettingsViewModel : ViewModel() {
         DINGDING, FEISHU, QQ, DISCORD, TELEGRAM, WECHAT,
         LAN_CONFIG,
         CLOUD_CHAT,
-        LLM_CONFIG
+        LLM_CONFIG,
+        WEBRTC_CONFIG
     }
 }

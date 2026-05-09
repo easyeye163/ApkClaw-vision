@@ -136,6 +136,14 @@ class SettingsActivity : BaseActivity() {
             showDivider = false
         )
         menuItems[SettingsViewModel.MenuAction.LLM_CONFIG.name]?.setLeadingIconColor(getColor(R.color.colorTextPrimary))
+
+        menuItems[SettingsViewModel.MenuAction.WEBRTC_CONFIG.name] = modelGroup.addMenuItem(
+            leadingIcon = R.drawable.ic_channel_cloud,
+            title = getString(R.string.menu_webrtc_config),
+            onClick = { viewModel.onMenuItemClick(SettingsViewModel.MenuAction.WEBRTC_CONFIG) },
+            showDivider = false
+        )
+        menuItems[SettingsViewModel.MenuAction.WEBRTC_CONFIG.name]?.setLeadingIconColor(getColor(R.color.colorTextPrimary))
     }
 
     private fun observeViewModel() {
@@ -242,6 +250,10 @@ class SettingsActivity : BaseActivity() {
                             }
                             SettingsViewModel.MenuAction.LLM_CONFIG -> {
                                 llmConfigLauncher.launch(Intent(this@SettingsActivity, LlmConfigActivity::class.java))
+                            }
+                            SettingsViewModel.MenuAction.WEBRTC_CONFIG -> {
+                                val intent = Intent(this@SettingsActivity, WebRTCConfigActivity::class.java)
+                                llmConfigLauncher.launch(intent)
                             }
                             null -> {}
                             else -> {}

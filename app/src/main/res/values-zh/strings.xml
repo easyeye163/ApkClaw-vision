@@ -327,6 +327,17 @@
     <string name="skill_copy_title">复制技能</string>
     <string name="skill_copied">技能已复制</string>
     <string name="skill_name_prompt_required">请输入名称和提示词</string>
+
+    <!-- 技能导入/导出 -->
+    <string name="skill_import_export">导入 / 导出</string>
+    <string name="skill_export_all_clipboard">导出全部（剪贴板）</string>
+    <string name="skill_import_from_clipboard">从剪贴板导入</string>
+    <string name="skill_export_empty">没有可导出的技能</string>
+    <string name="skill_export_success">已导出 %d 个技能到剪贴板</string>
+    <string name="skill_import_clipboard_empty">剪贴板为空</string>
+    <string name="skill_import_success">已导入 %d 个技能</string>
+    <string name="skill_import_failed">导入失败，格式无效</string>
+
     <!-- 悬浮菜单 -->
     <string name="floating_menu_chat">本地对话</string>
     <string name="floating_menu_analyze_screen">分析屏幕</string>
@@ -344,6 +355,38 @@
     <string name="cloud_chat_config_clear">清除</string>
     <string name="cloud_chat_config_cleared">云端对话配置已清除</string>
     <string name="chat_mode_local">本地模式（LLM）</string>
+
+    <!-- LLM 配置导入/导出 -->
+    <string name="llm_import_export">导入 / 导出</string>
+    <string name="llm_export_clipboard">导出配置（剪贴板）</string>
+    <string name="llm_import_clipboard">导入配置（剪贴板）</string>
+    <string name="llm_export_success">配置已导出到剪贴板</string>
+    <string name="llm_import_clipboard_empty">剪贴板为空</string>
+    <string name="llm_import_invalid_format">配置格式无效</string>
+    <string name="llm_import_filled">配置已加载，请检查后保存</string>
     <string name="chat_mode_cloud">云端模式（WebSocket）</string>
     <string name="chat_cloud_not_configured">未配置云端对话 WebSocket 地址，请在设置 → 通道 → 云端对话中配置</string>
+
+    <!-- CyberVerse / WebRTC -->
+    <string name="menu_webrtc_config">数字人</string>
+    <string name="webrtc_config_title">数字人（WebRTC）</string>
+    <string name="webrtc_enable">启用数字人</string>
+    <string name="webrtc_config_tip">连接 LiveKit 服务端，在悬浮窗中显示实时数字人视频流。</string>
+    <string name="webrtc_url_hint">如 wss://your-livekit-server.com</string>
+    <string name="webrtc_token_hint">在此粘贴 LiveKit 访问令牌</string>
+    <string name="webrtc_url_required">请填写 LiveKit URL</string>
+    <string name="webrtc_config_saved">数字人配置已保存</string>
+    <string name="webrtc_config_cleared">数字人配置已清除</string>
+    <string name="webrtc_connecting">正在连接数字人…</string>
+    <string name="webrtc_connected">数字人已连接</string>
+    <string name="webrtc_disconnected">数字人已断开</string>
+    <string name="webrtc_connection_failed">数字人连接失败</string>
+
+    <!-- 语音输入 -->
+    <string name="voice_input">语音</string>
+    <string name="voice_listening">正在聆听…</string>
+    <string name="voice_recognizing">识别中…</string>
+    <string name="voice_error">语音识别出错</string>
+    <string name="voice_no_match">无法识别语音内容</string>
+    <string name="voice_permission_required">需要麦克风权限</string>
 </resources>

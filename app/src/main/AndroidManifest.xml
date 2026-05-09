@@ -22,6 +22,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Device features -->
     <uses-feature
@@ -162,6 +163,10 @@
         </receiver>
 
             <!-- 透明截屏权限 Activity（不切换屏幕） -->
+        <activity
+            android:name=".ui.settings.WebRTCConfigActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".ui.chat.ScreenshotPermissionActivity"
             android:exported="false"

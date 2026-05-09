@@ -10,6 +10,7 @@ import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import com.blankj.utilcode.util.NetworkUtils
 import com.apk.claw.android.floating.FloatingCircleManager
+import com.apk.claw.android.webrtc.LiveKitRoomManager
 
 val appViewModel: AppViewModel by lazy { ClawApplication.appViewModelInstance }
 class ClawApplication : BaseApp() {
@@ -54,6 +55,14 @@ class ClawApplication : BaseApp() {
                 appViewModelInstance.afterInit()
             }
         }, "app-async-init").start()
+
+        // CyberVerse: init LiveKit and auto-connect if configured
+        LiveKitRoomManager.init(this)
+        Thread({
+            if (KVUtils.isWebRTCEnabled() && KVUtils.hasWebRTCConfig()) {
+                LiveKitRoomManager.connect()
+            }
+        }, "cyberverse-init").start()
     }
 
     private fun installCrashHandler() {

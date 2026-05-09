@@ -85,6 +85,15 @@
             android:contentDescription="@string/chat_attach_image"
             app:tint="@color/colorTextSecondary" />
 
+        <ImageView
+            android:id="@+id/btnVoice"
+            android:layout_width="36pt"
+            android:layout_height="36pt"
+            android:padding="8pt"
+            android:src="@drawable/ic_mic"
+            android:contentDescription="@string/chat_take_photo"
+            app:tint="@color/colorTextSecondary" />
+
         <EditText
             android:id="@+id/etMessage"
             android:layout_width="0dp"

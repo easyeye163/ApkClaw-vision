@@ -131,6 +131,9 @@ dependencies {
     implementation(libs.markwon.core)
     implementation(libs.markwon.tables)
 
+    // LiveKit WebRTC
+    implementation(libs.livekit)
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
