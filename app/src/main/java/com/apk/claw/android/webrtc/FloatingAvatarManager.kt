@@ -151,9 +151,11 @@ object FloatingAvatarManager {
         // Observe connection state and avatar status
         observeState()
 
-        // Trigger WebRTC connection if not already connected
-        if (DirectWebRTCManager.connectionState.value == DirectWebRTCManager.ConnectionState.DISCONNECTED) {
-            Log.d(TAG, "Triggering WebRTC connection...")
+        // Trigger WebRTC connection if not already connected or in error state
+        val connState = DirectWebRTCManager.connectionState.value
+        if (connState == DirectWebRTCManager.ConnectionState.DISCONNECTED ||
+            connState == DirectWebRTCManager.ConnectionState.ERROR) {
+            Log.d(TAG, "Triggering WebRTC connection (state=$connState)...")
             DirectWebRTCManager.connect()
         }
 

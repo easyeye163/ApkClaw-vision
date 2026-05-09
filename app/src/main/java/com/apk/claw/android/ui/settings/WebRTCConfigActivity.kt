@@ -1,9 +1,8 @@
 package com.apk.claw.android.ui.settings
 
 import android.os.Bundle
-import android.view.View
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.Button
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.Switch
@@ -16,16 +15,6 @@ import com.apk.claw.android.widget.CommonToolbar
 
 class WebRTCConfigActivity : BaseActivity() {
 
-    private val MODE_VALUES = arrayOf("omni", "standard")
-    private val MODE_LABELS = arrayOf(
-        "VoiceLLM (omni) - 内置语音处理",
-        "OpenClaw (standard) - ASR→LLM→TTS 流水线"
-    )
-    private val MODE_DESCRIPTIONS = arrayOf(
-        "VoiceLLM 模式：服务端内置语音大模型，单流处理音频+文本，不依赖外部 OpenClaw brain",
-        "OpenClaw 模式：标准流水线（ASR→LLM→TTS→Avatar），需要配置 OpenClaw brain 地址"
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_webrtc_config)
@@ -36,13 +25,14 @@ class WebRTCConfigActivity : BaseActivity() {
         }
 
         val switchEnabled = findViewById<Switch>(R.id.switchWebRTCEnabled)
-        val spinnerMode = findViewById<Spinner>(R.id.spinnerPipelineMode)
-        val tvModeDesc = findViewById<TextView>(R.id.tvPipelineModeDesc)
-        val layoutOpenClaw = findViewById<View>(R.id.layoutOpenClaw)
-        val etOpenClawWsUrl = findViewById<EditText>(R.id.etOpenClawWsUrl)
         val etWsBase = findViewById<EditText>(R.id.etWebRTCWsBase)
         val etApiBase = findViewById<EditText>(R.id.etWebRTCApiBase)
         val etCharacterId = findViewById<EditText>(R.id.etWebRTCCharacterId)
+        val spinnerChatMode = findViewById<Spinner>(R.id.spinnerChatMode)
+        val etOpenClawWsUrl = findViewById<EditText>(R.id.etOpenClawWsUrl)
+        val llOpenClawConfig = findViewById<android.widget.LinearLayout>(R.id.llOpenClawConfig)
+        val tvOpenClawTip = findViewById<TextView>(R.id.tvOpenClawTip)
+        val tvVoiceLlmTip = findViewById<TextView>(R.id.tvVoiceLlmTip)
 
         // Load saved config with defaults
         switchEnabled.isChecked = KVUtils.isWebRTCEnabled()
@@ -51,22 +41,32 @@ class WebRTCConfigActivity : BaseActivity() {
         etCharacterId.setText(KVUtils.getCyberVerseCharacterId())
         etOpenClawWsUrl.setText(KVUtils.getOpenClawWsUrl())
 
-        // Setup pipeline mode spinner
-        val modeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, MODE_LABELS)
+        // Chat mode spinner
+        val modes = arrayOf("VoiceLLM", "OpenClaw")
+        val modeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, modes)
         modeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerMode.adapter = modeAdapter
+        spinnerChatMode.adapter = modeAdapter
 
-        // Find current mode index
-        val currentMode = KVUtils.getPipelineMode()
-        val currentIndex = MODE_VALUES.indexOf(currentMode).coerceAtLeast(0)
-        spinnerMode.setSelection(currentIndex)
-        updateModeUI(currentIndex, tvModeDesc, layoutOpenClaw)
+        // Set current selection
+        val currentMode = KVUtils.getChatMode()
+        spinnerChatMode.setSelection(if (currentMode == "openclaw") 1 else 0)
 
-        spinnerMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                updateModeUI(position, tvModeDesc, layoutOpenClaw)
+        // Update OpenClaw fields visibility based on mode
+        fun updateModeVisibility(position: Int) {
+            val isOpenClaw = position == 1
+            llOpenClawConfig.visibility = if (isOpenClaw) android.view.View.VISIBLE else android.view.View.GONE
+            tvOpenClawTip.visibility = if (isOpenClaw) android.view.View.VISIBLE else android.view.View.GONE
+            tvVoiceLlmTip.visibility = if (isOpenClaw) android.view.View.GONE else android.view.View.VISIBLE
+        }
+
+        // Initial visibility
+        updateModeVisibility(spinnerChatMode.selectedItemPosition)
+
+        spinnerChatMode.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                updateModeVisibility(position)
             }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
 
         switchEnabled.setOnCheckedChangeListener { _, isChecked ->
@@ -76,42 +76,36 @@ class WebRTCConfigActivity : BaseActivity() {
             }
         }
 
-        findViewById<android.widget.Button>(R.id.btnSaveWebRTC).setOnClickListener {
-            val selectedMode = MODE_VALUES[spinnerMode.selectedItemPosition]
-            KVUtils.setPipelineMode(selectedMode)
+        findViewById<Button>(R.id.btnSaveWebRTC).setOnClickListener {
+            KVUtils.setWebRTCEnabled(switchEnabled.isChecked)
             KVUtils.setCyberVerseWsBase(etWsBase.text.toString().trim())
             KVUtils.setCyberVerseApiBase(etApiBase.text.toString().trim())
             KVUtils.setCyberVerseCharacterId(etCharacterId.text.toString().trim())
             KVUtils.setOpenClawWsUrl(etOpenClawWsUrl.text.toString().trim())
+
+            // Save chat mode
+            val selectedMode = if (spinnerChatMode.selectedItemPosition == 1) "openclaw" else "voicellm"
+            KVUtils.setChatMode(selectedMode)
+
             Toast.makeText(this, getString(R.string.webrtc_config_saved), Toast.LENGTH_SHORT).show()
             finish()
         }
 
-        findViewById<android.widget.Button>(R.id.btnClearWebRTC).setOnClickListener {
+        findViewById<Button>(R.id.btnClearWebRTC).setOnClickListener {
             switchEnabled.isChecked = false
-            spinnerMode.setSelection(0) // Reset to VoiceLLM
             etWsBase.setText("")
             etApiBase.setText("")
             etCharacterId.setText("")
             etOpenClawWsUrl.setText("")
+            spinnerChatMode.setSelection(0)
             KVUtils.setWebRTCEnabled(false)
-            KVUtils.setPipelineMode("omni")
             KVUtils.setCyberVerseWsBase("")
             KVUtils.setCyberVerseApiBase("")
             KVUtils.setCyberVerseCharacterId("")
             KVUtils.setOpenClawWsUrl("")
+            KVUtils.setChatMode("voicellm")
+            updateModeVisibility(0)
             Toast.makeText(this, getString(R.string.webrtc_config_cleared), Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun updateModeUI(position: Int, tvModeDesc: TextView, layoutOpenClaw: View) {
-        tvModeDesc.text = MODE_DESCRIPTIONS[position]
-        if (position == 1) {
-            // Standard/OpenClaw mode: show OpenClaw brain URL field
-            layoutOpenClaw.visibility = View.VISIBLE
-        } else {
-            // VoiceLLM mode: hide OpenClaw brain URL field
-            layoutOpenClaw.visibility = View.GONE
         }
     }
 }

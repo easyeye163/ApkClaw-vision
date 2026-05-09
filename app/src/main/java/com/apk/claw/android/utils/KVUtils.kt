@@ -217,6 +217,19 @@ object KVUtils {
     fun getCloudChatSessionId(): String = getString(KEY_CLOUD_CHAT_SESSION_ID, "")
     fun setCloudChatSessionId(value: String) = putString(KEY_CLOUD_CHAT_SESSION_ID, value)
 
+    // ==================== 聊天模式 (VoiceLLM / OpenClaw) ====================
+    private const val KEY_CHAT_MODE = "KEY_CHAT_MODE"
+    private const val KEY_OPENCLAW_WS_URL = "KEY_OPENCLAW_WS_URL"
+
+    /** 聊天模式: "voicellm" 或 "openclaw" */
+    fun getChatMode(): String = getString(KEY_CHAT_MODE, "voicellm")
+    fun setChatMode(value: String) = putString(KEY_CHAT_MODE, value)
+
+    fun isOpenClawMode(): Boolean = getChatMode() == "openclaw"
+
+    fun getOpenClawWsUrl(): String = getString(KEY_OPENCLAW_WS_URL, "ws://7110f985.r21.cpolar.top")
+    fun setOpenClawWsUrl(value: String) = putString(KEY_OPENCLAW_WS_URL, value)
+
     // ==================== CyberVerse Direct WebRTC 配置 ====================
     private const val KEY_WEBRTC_ENABLED = "KEY_WEBRTC_ENABLED"
     private const val KEY_WEBRTC_URL = "KEY_WEBRTC_URL"

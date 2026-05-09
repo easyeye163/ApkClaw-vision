@@ -50,34 +50,47 @@
                 android:textSize="11pt"
                 android:paddingBottom="16pt" />
 
-            <!-- Pipeline Mode selector -->
+            <!-- Chat Mode Selection -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Pipeline 模式"
+                android:text="聊天模式"
                 android:textColor="#CCCCCC"
                 android:textSize="12pt"
                 android:paddingBottom="4pt" />
 
             <Spinner
-                android:id="@+id/spinnerPipelineMode"
+                android:id="@+id/spinnerChatMode"
                 android:layout_width="match_parent"
                 android:layout_height="42pt"
-                android:background="@android:drawable/edit_text"
-                android:paddingHorizontal="12pt"
+                android:background="@android:drawable/spinner_background"
+                android:paddingHorizontal="8pt"
                 android:layout_marginBottom="4pt" />
 
+            <!-- VoiceLLM mode tip -->
             <TextView
-                android:id="@+id/tvPipelineModeDesc"
+                android:id="@+id/tvVoiceLlmTip"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textColor="#888888"
+                android:text="VoiceLLM: 通过CyberVerse信令通道收发消息，支持流式文本和语音转录，无需额外配置"
+                android:textColor="#666666"
                 android:textSize="10pt"
                 android:paddingBottom="16pt" />
 
-            <!-- OpenClaw Brain URL (only for standard mode) -->
+            <!-- OpenClaw mode tip -->
+            <TextView
+                android:id="@+id/tvOpenClawTip"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="OpenClaw: 通过独立OpenClaw服务进行LLM对话，回复会桥接到CyberVerse驱动数字人"
+                android:textColor="#FF8800"
+                android:textSize="10pt"
+                android:paddingBottom="8pt"
+                android:visibility="gone" />
+
+            <!-- OpenClaw WebSocket URL (only shown in OpenClaw mode) -->
             <LinearLayout
-                android:id="@+id/layoutOpenClaw"
+                android:id="@+id/llOpenClawConfig"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -86,7 +99,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="OpenClaw Brain 地址"
+                    android:text="OpenClaw WebSocket 地址"
                     android:textColor="#CCCCCC"
                     android:textSize="12pt"
                     android:paddingBottom="4pt" />
@@ -103,7 +116,6 @@
                     android:singleLine="true"
                     android:paddingHorizontal="12pt"
                     android:layout_marginBottom="16pt" />
-
             </LinearLayout>
 
             <!-- WebSocket Base URL -->

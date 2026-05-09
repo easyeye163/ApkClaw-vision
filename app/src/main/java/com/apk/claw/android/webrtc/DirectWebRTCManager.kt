@@ -62,33 +62,10 @@ object DirectWebRTCManager {
     private var webSocket: WebSocket? = null
     private var sessionId: String? = null
     private var eglBase: EglBase? = null
+    private var eglBaseReleased = false  // Track if EglBase was released (app-level cleanup)
 
     private val gson = Gson()
     private val mainHandler = Handler(Looper.getMainLooper())
-
-    /**
-     * Listener for streaming text responses (transcript tokens).
-     * Used by CloudChatManager to display LLM responses when sharing the WebRTC session.
-     */
-    interface TextResponseListener {
-        fun onTranscriptToken(text: String, isFinal: Boolean)
-        fun onTextError(error: String)
-    }
-
-    private val textResponseListeners = mutableListOf<TextResponseListener>()
-
-    fun addTextResponseListener(listener: TextResponseListener) {
-        if (!textResponseListeners.contains(listener)) {
-            textResponseListeners.add(listener)
-        }
-    }
-
-    fun removeTextResponseListener(listener: TextResponseListener) {
-        textResponseListeners.remove(listener)
-    }
-
-    fun isConnectedAndReady(): Boolean =
-        webSocket != null && _connectionState.value == ConnectionState.CONNECTED
 
     // Serialized signaling chain - ensures operations happen in order
     private var signalingReady = false
@@ -113,7 +90,6 @@ object DirectWebRTCManager {
             PeerConnectionFactory.initialize(initializationOptions)
 
             // Create EglBase early - shared by decoder factory and renderers
-            // This EglBase must NOT be released during disconnect(), only on app exit.
             eglBase = EglBase.create()
             val eglBaseContext = eglBase!!.eglBaseContext
 
@@ -155,13 +131,8 @@ object DirectWebRTCManager {
             return false
         }
 
-        // Ensure EglBase and PeerConnectionFactory are available
-        if (eglBase == null || peerConnectionFactory == null) {
-            Log.e(TAG, "EglBase or PeerConnectionFactory not initialized - cannot connect")
-            return false
-        }
-
-        disconnect()
+        // Use lightweight reset - do NOT destroy renderer or EglBase
+        resetConnection()
         _connectionState.value = ConnectionState.CONNECTING
         Log.d(TAG, "Connecting to CyberVerse: api=$apiBase, ws=$wsBase, char=$characterId")
 
@@ -195,9 +166,7 @@ object DirectWebRTCManager {
     private fun createSession(apiBase: String, characterId: String): String? {
         try {
             val url = if (apiBase.endsWith("/")) "${apiBase}sessions" else "$apiBase/sessions"
-            val pipelineMode = KVUtils.getPipelineMode()
-            val body = gson.toJson(mapOf("character_id" to characterId, "mode" to pipelineMode))
-            Log.d(TAG, "Creating session with mode=$pipelineMode")
+            val body = gson.toJson(mapOf("character_id" to characterId, "mode" to "omni"))
 
             val request = Request.Builder()
                 .url(url)
@@ -293,6 +262,7 @@ object DirectWebRTCManager {
             "ice_candidate" -> handleIceCandidate(json)
             "avatar_status" -> handleAvatarStatus(json)
             "transcript" -> handleTranscript(json)
+            "llm_token" -> handleLlmToken(json)
             else -> Log.d(TAG, "Unhandled message type: $type")
         }
     }
@@ -525,42 +495,55 @@ object DirectWebRTCManager {
     }
 
     /**
-     * Handle transcript message - accumulate tokens and notify listeners.
-     * { "type": "transcript", "speaker": "assistant", "text": "token", "is_final": false }
+     * Handle transcript message (voice pipeline).
      */
-    private var transcriptAccumulator = StringBuilder()
-    private var transcriptSessionActive = false
-
     private fun handleTranscript(json: JsonObject) {
         val speaker = json.get("speaker")?.asString ?: return
         val text = json.get("text")?.asString ?: return
         val isFinal = json.get("is_final")?.asBoolean ?: false
         Log.d(TAG, "Transcript [$speaker${if (isFinal) "" else " (partial)"}]: $text")
 
-        if (speaker == "assistant" && textResponseListeners.isNotEmpty()) {
-            if (!transcriptSessionActive) {
-                transcriptAccumulator.clear()
-                transcriptSessionActive = true
-            }
-            transcriptAccumulator.append(text)
-            val accumulated = transcriptAccumulator.toString()
+        // Forward to text response listener for VoiceLLM mode
+        if (speaker == "assistant") {
             mainHandler.post {
-                for (listener in textResponseListeners) {
-                    listener.onTranscriptToken(accumulated, isFinal)
-                }
-            }
-            if (isFinal) {
-                transcriptSessionActive = false
-                transcriptAccumulator.clear()
+                textResponseListener?.onTextResponse(text, isFinal)
             }
         }
     }
 
     /**
+     * Handle llm_token message (text pipeline - streaming).
+     */
+    private fun handleLlmToken(json: JsonObject) {
+        val accumulated = json.get("accumulated")?.asString ?: return
+        val isFinal = json.get("is_final")?.asBoolean ?: false
+        Log.d(TAG, "LLM token [${if (isFinal) "final" else "streaming"}]: ${accumulated.take(50)}...")
+
+        mainHandler.post {
+            textResponseListener?.onLlmToken(accumulated, isFinal)
+        }
+    }
+
+    /**
+     * Listener for text/LLM responses (used by VoiceLLM chat mode).
+     */
+    interface TextResponseListener {
+        fun onLlmToken(accumulated: String, isFinal: Boolean)
+        fun onTextResponse(text: String, isFinal: Boolean)
+    }
+
+    private var textResponseListener: TextResponseListener? = null
+
+    fun setTextResponseListener(listener: TextResponseListener?) {
+        textResponseListener = listener
+    }
+
+    /**
      * Get the shared EglBase instance (created during init).
+     * EglBase has app-level lifetime - never released during disconnect/reconnect.
      */
     fun getEglBase(): EglBase? {
-        if (eglBase == null) {
+        if (eglBase == null && !eglBaseReleased) {
             try {
                 eglBase = EglBase.create()
                 Log.w(TAG, "EglBase created lazily (should have been created in init)")
@@ -632,11 +615,12 @@ object DirectWebRTCManager {
     }
 
     /**
-     * Disconnect and clean up all resources.
+     * Lightweight connection reset - closes WS + PeerConnection but preserves
+     * renderer and EglBase (they have app-level lifetime).
      */
-    fun disconnect() {
+    private fun resetConnection() {
         try {
-            webSocket?.close(1000, "disconnect")
+            webSocket?.close(1000, "reset")
         } catch (e: Exception) {
             Log.w(TAG, "Error closing WebSocket", e)
         }
@@ -645,6 +629,7 @@ object DirectWebRTCManager {
         signalingReady = false
         pendingIceCandidates.clear()
 
+        // Remove sink but do NOT unbind/release the renderer
         try {
             remoteVideoTrack?.removeSink(videoRenderer)
         } catch (_: Exception) {}
@@ -660,15 +645,36 @@ object DirectWebRTCManager {
         } catch (_: Exception) {}
         peerConnection = null
 
-        unbindRenderer()
-
-        // IMPORTANT: Do NOT release eglBase here!
-        // It is shared with PeerConnectionFactory's VideoDecoderFactory.
-        // Releasing it would break video decoding on subsequent connections.
-        // eglBase is only released when the app process exits.
-
         _connectionState.value = ConnectionState.DISCONNECTED
         _avatarStatus.value = AvatarStatus.IDLE
+    }
+
+    /**
+     * Disconnect and clean up connection resources.
+     * Does NOT destroy renderer or EglBase - those have app-level lifetime.
+     */
+    fun disconnect() {
+        resetConnection()
+    }
+
+    /**
+     * Full cleanup - releases all resources including EglBase and PeerConnectionFactory.
+     * Only call when the app is being destroyed.
+     */
+    fun destroy() {
+        disconnect()
+        unbindRenderer()
+
+        try {
+            eglBase?.release()
+        } catch (_: Exception) {}
+        eglBase = null
+        eglBaseReleased = true
+
+        try {
+            peerConnectionFactory?.dispose()
+        } catch (_: Exception) {}
+        peerConnectionFactory = null
     }
 
     /**
@@ -681,6 +687,17 @@ object DirectWebRTCManager {
         } catch (e: Exception) {
             Log.e(TAG, "Error sending WS message", e)
         }
+    }
+
+    /**
+     * Send assistant text to CyberVerse for TTS/avatar (used by OpenClaw mode bridge).
+     */
+    fun sendAssistantText(text: String) {
+        if (webSocket == null) {
+            Log.w(TAG, "Cannot send assistant text - not connected")
+            return
+        }
+        sendWsMessage(mapOf("type" to "assistant_text", "text" to text))
     }
 
     /**

@@ -383,7 +383,8 @@ class ChatActivity : BaseActivity() {
         tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
         val tvModeHint = findViewById<android.widget.TextView>(R.id.tvModeHint)
         if (switchCloudMode.isChecked) {
-            tvModeHint.text = getString(R.string.chat_mode_cloud)
+            val modeName = CloudChatManager.getModeDisplayName()
+            tvModeHint.text = "云端模式 · $modeName"
             tvModeHint.visibility = View.VISIBLE
         } else {
             tvModeHint.text = getString(R.string.chat_mode_local)
@@ -787,19 +788,9 @@ class ChatActivity : BaseActivity() {
     }
 
     /**
-     * 云端模式：通过 WebSocket 发送到云端服务
+     * 云端模式：通过 CloudChatManager 发送（根据模式走 VoiceLLM 或 OpenClaw）
      */
     private fun sendCloudMessage(text: String) {
-        val wsUrl = com.apk.claw.android.utils.KVUtils.getCloudChatWsUrl().trim()
-        if (wsUrl.isEmpty()) {
-            adapter.addMessage(ChatMessage(
-                text = getString(R.string.chat_cloud_not_configured),
-                isUser = false,
-                timestamp = System.currentTimeMillis()
-            ))
-            return
-        }
-
         val thinkingMessage = ChatMessage(
             text = getString(R.string.chat_thinking),
             isUser = false,
