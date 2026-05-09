@@ -45,26 +45,26 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/webrtc_config_tip"
+                android:text="@string/webrtc_direct_config_tip"
                 android:textColor="#888888"
                 android:textSize="11pt"
                 android:paddingBottom="16pt" />
 
-            <!-- LiveKit URL -->
+            <!-- WebSocket Base URL -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="LiveKit URL"
+                android:text="@string/webrtc_ws_base_label"
                 android:textColor="#CCCCCC"
                 android:textSize="12pt"
                 android:paddingBottom="4pt" />
 
             <EditText
-                android:id="@+id/etWebRTCUrl"
+                android:id="@+id/etWebRTCWsBase"
                 android:layout_width="match_parent"
                 android:layout_height="42pt"
                 android:background="@android:drawable/edit_text"
-                android:hint="@string/webrtc_url_hint"
+                android:hint="@string/webrtc_ws_base_hint"
                 android:textColorHint="#666666"
                 android:textColor="#FFFFFF"
                 android:inputType="textUri"
@@ -72,25 +72,47 @@
                 android:paddingHorizontal="12pt"
                 android:layout_marginBottom="16pt" />
 
-            <!-- Token -->
+            <!-- API Base URL -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Token"
+                android:text="@string/webrtc_api_base_label"
                 android:textColor="#CCCCCC"
                 android:textSize="12pt"
                 android:paddingBottom="4pt" />
 
             <EditText
-                android:id="@+id/etWebRTCToken"
+                android:id="@+id/etWebRTCApiBase"
                 android:layout_width="match_parent"
                 android:layout_height="42pt"
                 android:background="@android:drawable/edit_text"
-                android:hint="@string/webrtc_token_hint"
+                android:hint="@string/webrtc_api_base_hint"
                 android:textColorHint="#666666"
                 android:textColor="#FFFFFF"
-                android:inputType="textMultiLine"
-                android:minLines="3"
+                android:inputType="textUri"
+                android:singleLine="true"
+                android:paddingHorizontal="12pt"
+                android:layout_marginBottom="16pt" />
+
+            <!-- Character ID -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/webrtc_character_id_label"
+                android:textColor="#CCCCCC"
+                android:textSize="12pt"
+                android:paddingBottom="4pt" />
+
+            <EditText
+                android:id="@+id/etWebRTCCharacterId"
+                android:layout_width="match_parent"
+                android:layout_height="42pt"
+                android:background="@android:drawable/edit_text"
+                android:hint="@string/webrtc_character_id_hint"
+                android:textColorHint="#666666"
+                android:textColor="#FFFFFF"
+                android:inputType="text"
+                android:singleLine="true"
                 android:paddingHorizontal="12pt"
                 android:layout_marginBottom="24pt" />
 

@@ -367,14 +367,18 @@
     <string name="chat_mode_cloud">云端模式（WebSocket）</string>
     <string name="chat_cloud_not_configured">未配置云端对话 WebSocket 地址，请在设置 → 通道 → 云端对话中配置</string>
 
-    <!-- CyberVerse / WebRTC -->
-    <string name="menu_webrtc_config">数字人</string>
-    <string name="webrtc_config_title">数字人（WebRTC）</string>
+    <!-- CyberVerse / WebRTC Direct -->
+    <string name="menu_webrtc_config">数字人直连</string>
+    <string name="webrtc_config_title">数字人直连（WebRTC）</string>
     <string name="webrtc_enable">启用数字人</string>
-    <string name="webrtc_config_tip">连接 LiveKit 服务端，在悬浮窗中显示实时数字人视频流。</string>
-    <string name="webrtc_url_hint">如 wss://your-livekit-server.com</string>
-    <string name="webrtc_token_hint">在此粘贴 LiveKit 访问令牌</string>
-    <string name="webrtc_url_required">请填写 LiveKit URL</string>
+    <string name="webrtc_direct_config_tip">通过 Direct WebRTC（P2P直连）连接 CyberVerse 服务端，在悬浮窗中显示实时数字人视频流，无需 LiveKit SFU 中转。</string>
+    <string name="webrtc_ws_base_label">WebSocket 基础地址</string>
+    <string name="webrtc_ws_base_hint">如 ws://73e09112.r21.cpolar.top</string>
+    <string name="webrtc_api_base_label">API 基础地址</string>
+    <string name="webrtc_api_base_hint">如 http://73e09112.r21.cpolar.top/api/v1</string>
+    <string name="webrtc_character_id_label">角色 ID</string>
+    <string name="webrtc_character_id_hint">如 claw_3a375b3f</string>
+    <string name="webrtc_url_required">请填写 API 基础地址</string>
     <string name="webrtc_config_saved">数字人配置已保存</string>
     <string name="webrtc_config_cleared">数字人配置已清除</string>
     <string name="webrtc_connecting">正在连接数字人…</string>

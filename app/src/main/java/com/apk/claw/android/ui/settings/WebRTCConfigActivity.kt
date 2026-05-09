@@ -21,35 +21,40 @@ class WebRTCConfigActivity : BaseActivity() {
         }
 
         val switchEnabled = findViewById<Switch>(R.id.switchWebRTCEnabled)
-        val etUrl = findViewById<EditText>(R.id.etWebRTCUrl)
-        val etToken = findViewById<EditText>(R.id.etWebRTCToken)
+        val etWsBase = findViewById<EditText>(R.id.etWebRTCWsBase)
+        val etApiBase = findViewById<EditText>(R.id.etWebRTCApiBase)
+        val etCharacterId = findViewById<EditText>(R.id.etWebRTCCharacterId)
 
-        // Load saved config
+        // Load saved config with defaults
         switchEnabled.isChecked = KVUtils.isWebRTCEnabled()
-        etUrl.setText(KVUtils.getWebRTCUrl())
-        etToken.setText(KVUtils.getWebRTCToken())
+        etWsBase.setText(KVUtils.getCyberVerseWsBase())
+        etApiBase.setText(KVUtils.getCyberVerseApiBase())
+        etCharacterId.setText(KVUtils.getCyberVerseCharacterId())
 
         switchEnabled.setOnCheckedChangeListener { _, isChecked ->
             KVUtils.setWebRTCEnabled(isChecked)
-            if (isChecked && etUrl.text.toString().trim().isEmpty()) {
+            if (isChecked && etApiBase.text.toString().trim().isEmpty()) {
                 Toast.makeText(this, getString(R.string.webrtc_url_required), Toast.LENGTH_SHORT).show()
             }
         }
 
         findViewById<android.widget.Button>(R.id.btnSaveWebRTC).setOnClickListener {
-            KVUtils.setWebRTCUrl(etUrl.text.toString().trim())
-            KVUtils.setWebRTCToken(etToken.text.toString().trim())
+            KVUtils.setCyberVerseWsBase(etWsBase.text.toString().trim())
+            KVUtils.setCyberVerseApiBase(etApiBase.text.toString().trim())
+            KVUtils.setCyberVerseCharacterId(etCharacterId.text.toString().trim())
             Toast.makeText(this, getString(R.string.webrtc_config_saved), Toast.LENGTH_SHORT).show()
             finish()
         }
 
         findViewById<android.widget.Button>(R.id.btnClearWebRTC).setOnClickListener {
             switchEnabled.isChecked = false
-            etUrl.setText("")
-            etToken.setText("")
+            etWsBase.setText("")
+            etApiBase.setText("")
+            etCharacterId.setText("")
             KVUtils.setWebRTCEnabled(false)
-            KVUtils.setWebRTCUrl("")
-            KVUtils.setWebRTCToken("")
+            KVUtils.setCyberVerseWsBase("")
+            KVUtils.setCyberVerseApiBase("")
+            KVUtils.setCyberVerseCharacterId("")
             Toast.makeText(this, getString(R.string.webrtc_config_cleared), Toast.LENGTH_SHORT).show()
         }
     }

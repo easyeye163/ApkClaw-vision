@@ -13,7 +13,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import com.apk.claw.android.R
 import com.apk.claw.android.utils.KVUtils
-import io.livekit.android.renderer.SurfaceViewRenderer
+import org.webrtc.SurfaceViewRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,7 +21,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Floating avatar window manager.
- * Shows a small draggable overlay with the LiveKit video renderer for digital avatar.
+ * Shows a small draggable overlay with the WebRTC video renderer for digital avatar.
+ * Works with both DirectWebRTCManager and (legacy) LiveKitRoomManager.
  */
 class FloatingAvatarManager(private val context: Context) {
 
@@ -53,7 +54,7 @@ class FloatingAvatarManager(private val context: Context) {
 
         val sizePx = (AVATAR_SIZE_DP * context.resources.displayMetrics.density).toInt()
 
-        // Create the video renderer
+        // Create the video renderer (org.webrtc.SurfaceViewRenderer)
         renderer = SurfaceViewRenderer(context).apply {
             setZOrderMediaOverlay(true)
         }
@@ -116,8 +117,8 @@ class FloatingAvatarManager(private val context: Context) {
 
         windowManager.addView(avatarView, params)
 
-        // Bind the renderer to LiveKit
-        renderer?.let { LiveKitRoomManager.bindRenderer(it) }
+        // Bind the renderer to DirectWebRTCManager
+        renderer?.let { DirectWebRTCManager.bindRenderer(it) }
 
         // Observe connection state
         observeState()
@@ -132,7 +133,7 @@ class FloatingAvatarManager(private val context: Context) {
         observeJob?.cancel()
         observeJob = null
 
-        LiveKitRoomManager.unbindRenderer()
+        DirectWebRTCManager.unbindRenderer()
 
         avatarView?.let {
             try {
@@ -174,22 +175,21 @@ class FloatingAvatarManager(private val context: Context) {
     }
 
     private fun observeState() {
-        observeJob?.cancel()
         observeJob = CoroutineScope(Dispatchers.Main).launch {
-            LiveKitRoomManager.connectionState.collect { state ->
+            DirectWebRTCManager.connectionState.collect { state ->
                 when (state) {
-                    LiveKitRoomManager.ConnectionState.CONNECTING -> {
+                    DirectWebRTCManager.ConnectionState.CONNECTING -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_connecting)
                         statusIndicator?.visibility = View.VISIBLE
                     }
-                    LiveKitRoomManager.ConnectionState.CONNECTED -> {
+                    DirectWebRTCManager.ConnectionState.CONNECTED -> {
                         statusIndicator?.visibility = View.GONE
                     }
-                    LiveKitRoomManager.ConnectionState.ERROR -> {
+                    DirectWebRTCManager.ConnectionState.ERROR -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_error)
                         statusIndicator?.visibility = View.VISIBLE
                     }
-                    LiveKitRoomManager.ConnectionState.DISCONNECTED -> {
+                    DirectWebRTCManager.ConnectionState.DISCONNECTED -> {
                         statusIndicator?.visibility = View.VISIBLE
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_disconnected)
                     }

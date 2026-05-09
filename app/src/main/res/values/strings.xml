@@ -366,14 +366,18 @@
     <string name="chat_mode_cloud">Cloud Mode (WebSocket)</string>
     <string name="chat_cloud_not_configured">Cloud chat WebSocket address not configured. Go to Settings → Channels → Cloud Chat to configure.</string>
 
-    <!-- CyberVerse / WebRTC -->
-    <string name="menu_webrtc_config">CyberVerse</string>
-    <string name="webrtc_config_title">CyberVerse (WebRTC)</string>
+    <!-- CyberVerse / WebRTC Direct -->
+    <string name="menu_webrtc_config">CyberVerse Direct</string>
+    <string name="webrtc_config_title">CyberVerse Direct (WebRTC)</string>
     <string name="webrtc_enable">Enable Digital Avatar</string>
-    <string name="webrtc_config_tip">Connect to a LiveKit server to display a real-time digital avatar in the floating window.</string>
-    <string name="webrtc_url_hint">e.g. wss://your-livekit-server.com</string>
-    <string name="webrtc_token_hint">Paste LiveKit access token here</string>
-    <string name="webrtc_url_required">Please enter LiveKit URL</string>
+    <string name="webrtc_direct_config_tip">Connect to a CyberVerse server via Direct WebRTC (P2P) to display a real-time digital avatar in the floating window. No LiveKit SFU required.</string>
+    <string name="webrtc_ws_base_label">WebSocket Base URL</string>
+    <string name="webrtc_ws_base_hint">e.g. ws://73e09112.r21.cpolar.top</string>
+    <string name="webrtc_api_base_label">API Base URL</string>
+    <string name="webrtc_api_base_hint">e.g. http://73e09112.r21.cpolar.top/api/v1</string>
+    <string name="webrtc_character_id_label">Character ID</string>
+    <string name="webrtc_character_id_hint">e.g. claw_3a375b3f</string>
+    <string name="webrtc_url_required">Please enter API Base URL</string>
     <string name="webrtc_config_saved">CyberVerse config saved</string>
     <string name="webrtc_config_cleared">CyberVerse config cleared</string>
     <string name="webrtc_connecting">Connecting to CyberVerse…</string>

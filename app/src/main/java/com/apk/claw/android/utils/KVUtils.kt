@@ -217,7 +217,7 @@ object KVUtils {
     fun getCloudChatSessionId(): String = getString(KEY_CLOUD_CHAT_SESSION_ID, "")
     fun setCloudChatSessionId(value: String) = putString(KEY_CLOUD_CHAT_SESSION_ID, value)
 
-    // ==================== CyberVerse / WebRTC 配置 ====================
+    // ==================== CyberVerse Direct WebRTC 配置 ====================
     private const val KEY_WEBRTC_ENABLED = "KEY_WEBRTC_ENABLED"
     private const val KEY_WEBRTC_URL = "KEY_WEBRTC_URL"
     private const val KEY_WEBRTC_TOKEN = "KEY_WEBRTC_TOKEN"
@@ -232,4 +232,20 @@ object KVUtils {
     fun setWebRTCToken(value: String) = putString(KEY_WEBRTC_TOKEN, value)
 
     fun hasWebRTCConfig(): Boolean = getWebRTCUrl().isNotEmpty()
+
+    // ==================== CyberVerse Direct 模式配置 ====================
+    private const val KEY_CV_WS_BASE = "KEY_CV_WS_BASE"
+    private const val KEY_CV_API_BASE = "KEY_CV_API_BASE"
+    private const val KEY_CV_CHARACTER_ID = "KEY_CV_CHARACTER_ID"
+
+    fun getCyberVerseWsBase(): String = getString(KEY_CV_WS_BASE, "ws://73e09112.r21.cpolar.top")
+    fun setCyberVerseWsBase(value: String) = putString(KEY_CV_WS_BASE, value)
+
+    fun getCyberVerseApiBase(): String = getString(KEY_CV_API_BASE, "http://73e09112.r21.cpolar.top/api/v1")
+    fun setCyberVerseApiBase(value: String) = putString(KEY_CV_API_BASE, value)
+
+    fun getCyberVerseCharacterId(): String = getString(KEY_CV_CHARACTER_ID, "claw_3a375b3f")
+    fun setCyberVerseCharacterId(value: String) = putString(KEY_CV_CHARACTER_ID, value)
+
+    fun hasCyberVerseConfig(): Boolean = getCyberVerseApiBase().isNotEmpty() && getCyberVerseCharacterId().isNotEmpty()
 }

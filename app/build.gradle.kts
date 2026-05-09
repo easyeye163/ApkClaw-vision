@@ -131,8 +131,8 @@ dependencies {
     implementation(libs.markwon.core)
     implementation(libs.markwon.tables)
 
-    // LiveKit WebRTC
-    implementation(libs.livekit)
+    // WebRTC (Direct mode - Google WebRTC SDK)
+    implementation(libs.webrtc)
 
 
     testImplementation(libs.junit)
