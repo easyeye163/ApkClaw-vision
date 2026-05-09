@@ -218,7 +218,8 @@ object CloudChatManager {
         Thread({
             try {
                 val url = if (apiBase.endsWith("/")) "${apiBase}sessions" else "$apiBase/sessions"
-                val body = gson.toJson(mapOf("character_id" to characterId, "mode" to "omni"))
+                val pipelineMode = KVUtils.getPipelineMode()
+                val body = gson.toJson(mapOf("character_id" to characterId, "mode" to pipelineMode))
 
                 val request = Request.Builder()
                     .url(url)

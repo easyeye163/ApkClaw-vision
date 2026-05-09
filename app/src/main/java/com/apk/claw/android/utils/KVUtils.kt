@@ -237,6 +237,8 @@ object KVUtils {
     private const val KEY_CV_WS_BASE = "KEY_CV_WS_BASE"
     private const val KEY_CV_API_BASE = "KEY_CV_API_BASE"
     private const val KEY_CV_CHARACTER_ID = "KEY_CV_CHARACTER_ID"
+    private const val KEY_CV_PIPELINE_MODE = "KEY_CV_PIPELINE_MODE"
+    private const val KEY_CV_OPENCLAW_WS_URL = "KEY_CV_OPENCLAW_WS_URL"
 
     fun getCyberVerseWsBase(): String = getString(KEY_CV_WS_BASE, "ws://73e09112.r21.cpolar.top")
     fun setCyberVerseWsBase(value: String) = putString(KEY_CV_WS_BASE, value)
@@ -246,6 +248,18 @@ object KVUtils {
 
     fun getCyberVerseCharacterId(): String = getString(KEY_CV_CHARACTER_ID, "claw_3a375b3f")
     fun setCyberVerseCharacterId(value: String) = putString(KEY_CV_CHARACTER_ID, value)
+
+    /**
+     * Pipeline 模式: "omni" (VoiceLLM) 或 "standard" (OpenClaw)
+     * - omni: VoiceLLM 单流模式，不依赖 OpenClaw brain，服务端内置语音处理
+     * - standard: 标准 ASR→LLM→TTS→Avatar 流水线，可选连接 OpenClaw brain (ws://7110f985)
+     */
+    fun getPipelineMode(): String = getString(KEY_CV_PIPELINE_MODE, "omni")
+    fun setPipelineMode(value: String) = putString(KEY_CV_PIPELINE_MODE, value)
+
+    /** OpenClaw brain WebSocket 地址（仅 standard 模式使用） */
+    fun getOpenClawWsUrl(): String = getString(KEY_CV_OPENCLAW_WS_URL, "ws://7110f985.r21.cpolar.top")
+    fun setOpenClawWsUrl(value: String) = putString(KEY_CV_OPENCLAW_WS_URL, value)
 
     fun hasCyberVerseConfig(): Boolean = getCyberVerseApiBase().isNotEmpty() && getCyberVerseCharacterId().isNotEmpty()
 }

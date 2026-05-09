@@ -113,6 +113,7 @@ object DirectWebRTCManager {
             PeerConnectionFactory.initialize(initializationOptions)
 
             // Create EglBase early - shared by decoder factory and renderers
+            // This EglBase must NOT be released during disconnect(), only on app exit.
             eglBase = EglBase.create()
             val eglBaseContext = eglBase!!.eglBaseContext
 
@@ -154,6 +155,12 @@ object DirectWebRTCManager {
             return false
         }
 
+        // Ensure EglBase and PeerConnectionFactory are available
+        if (eglBase == null || peerConnectionFactory == null) {
+            Log.e(TAG, "EglBase or PeerConnectionFactory not initialized - cannot connect")
+            return false
+        }
+
         disconnect()
         _connectionState.value = ConnectionState.CONNECTING
         Log.d(TAG, "Connecting to CyberVerse: api=$apiBase, ws=$wsBase, char=$characterId")
@@ -188,7 +195,9 @@ object DirectWebRTCManager {
     private fun createSession(apiBase: String, characterId: String): String? {
         try {
             val url = if (apiBase.endsWith("/")) "${apiBase}sessions" else "$apiBase/sessions"
-            val body = gson.toJson(mapOf("character_id" to characterId, "mode" to "omni"))
+            val pipelineMode = KVUtils.getPipelineMode()
+            val body = gson.toJson(mapOf("character_id" to characterId, "mode" to pipelineMode))
+            Log.d(TAG, "Creating session with mode=$pipelineMode")
 
             val request = Request.Builder()
                 .url(url)
@@ -653,10 +662,10 @@ object DirectWebRTCManager {
 
         unbindRenderer()
 
-        try {
-            eglBase?.release()
-        } catch (_: Exception) {}
-        eglBase = null
+        // IMPORTANT: Do NOT release eglBase here!
+        // It is shared with PeerConnectionFactory's VideoDecoderFactory.
+        // Releasing it would break video decoding on subsequent connections.
+        // eglBase is only released when the app process exits.
 
         _connectionState.value = ConnectionState.DISCONNECTED
         _avatarStatus.value = AvatarStatus.IDLE

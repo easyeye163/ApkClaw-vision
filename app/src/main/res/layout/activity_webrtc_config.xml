@@ -50,6 +50,62 @@
                 android:textSize="11pt"
                 android:paddingBottom="16pt" />
 
+            <!-- Pipeline Mode selector -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Pipeline 模式"
+                android:textColor="#CCCCCC"
+                android:textSize="12pt"
+                android:paddingBottom="4pt" />
+
+            <Spinner
+                android:id="@+id/spinnerPipelineMode"
+                android:layout_width="match_parent"
+                android:layout_height="42pt"
+                android:background="@android:drawable/edit_text"
+                android:paddingHorizontal="12pt"
+                android:layout_marginBottom="4pt" />
+
+            <TextView
+                android:id="@+id/tvPipelineModeDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#888888"
+                android:textSize="10pt"
+                android:paddingBottom="16pt" />
+
+            <!-- OpenClaw Brain URL (only for standard mode) -->
+            <LinearLayout
+                android:id="@+id/layoutOpenClaw"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="OpenClaw Brain 地址"
+                    android:textColor="#CCCCCC"
+                    android:textSize="12pt"
+                    android:paddingBottom="4pt" />
+
+                <EditText
+                    android:id="@+id/etOpenClawWsUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="42pt"
+                    android:background="@android:drawable/edit_text"
+                    android:hint="ws://7110f985.r21.cpolar.top"
+                    android:textColorHint="#666666"
+                    android:textColor="#FFFFFF"
+                    android:inputType="textUri"
+                    android:singleLine="true"
+                    android:paddingHorizontal="12pt"
+                    android:layout_marginBottom="16pt" />
+
+            </LinearLayout>
+
             <!-- WebSocket Base URL -->
             <TextView
                 android:layout_width="match_parent"
