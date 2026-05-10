@@ -70,7 +70,12 @@ object DirectWebRTCManager {
     // Serialized signaling chain - ensures operations happen in order
     private var signalingReady = false
     private val pendingIceCandidates = mutableListOf<JsonObject>()
-    private var iceServers: List<PeerConnection.IceServer> = emptyList()
+    @Volatile private var iceServers: List<PeerConnection.IceServer> = emptyList()
+
+    // ICE restart/retry tracking
+    private var iceRestartAttempts = 0
+    private val maxIceRestartAttempts = 2
+    private var iceRestartRunnable: Runnable? = null
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -292,6 +297,14 @@ object DirectWebRTCManager {
                         .createIceServer()
                 }
                 Log.d(TAG, "ICE servers configured: ${iceServers.size} servers")
+                // Log each ICE server type for debugging
+                iceServers.forEachIndexed { i, server ->
+                    val serverUrls = server.urls.joinToString(", ")
+                    val hasTurn = serverUrls.contains("turn")
+                    val hasStun = serverUrls.contains("stun")
+                    val hasTcp = serverUrls.contains("?transport=tcp") || serverUrls.contains("tcp:")
+                    Log.d(TAG, "  ICE server[$i]: type=${if (hasTurn) "TURN" else if (hasStun) "STUN" else "UNKNOWN"}, urls=$serverUrls, hasAuth=${server.username.isNotEmpty()}, tcp=$hasTcp")
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Error parsing ICE config", e)
@@ -307,10 +320,13 @@ object DirectWebRTCManager {
         val sdpStr = json.get("sdp")?.asString ?: return
         Log.d(TAG, "Received WebRTC offer (${sdpStr.length} chars)")
 
-        // Debug: log whether the offer contains video media
+        // Debug: log offer SDP details
         val hasVideoMline = sdpStr.contains("m=video")
         val hasAudioMline = sdpStr.contains("m=audio")
-        Log.d(TAG, "Offer contains: audio=$hasAudioMline, video=$hasVideoMline")
+        val offerVideoDir = extractSdpDirection(sdpStr, "video")
+        val offerAudioDir = extractSdpDirection(sdpStr, "audio")
+        Log.d(TAG, "Offer SDP (${sdpStr.length} chars): audio=$hasAudioMline($offerAudioDir), video=$hasVideoMline($offerVideoDir)")
+        Log.d(TAG, "Offer SDP (first 500 chars): ${sdpStr.take(500)}")
         if (!hasVideoMline) {
             Log.w(TAG, "WARNING: SDP offer does NOT contain video media line! Server may not support video.")
         }
@@ -374,9 +390,18 @@ object DirectWebRTCManager {
                         _connectionState.value = ConnectionState.ERROR
                         return
                     }
-                    // Debug: log answer content
-                    val answerHasVideo = sdp.description?.contains("m=video") == true
-                    Log.d(TAG, "Answer created (has video: $answerHasVideo)")
+                    // Debug: log answer content details
+                    val desc = sdp.description ?: ""
+                    val answerHasVideo = desc.contains("m=video")
+                    val answerHasAudio = desc.contains("m=audio")
+                    val answerVideoDirection = extractSdpDirection(desc, "video")
+                    val answerAudioDirection = extractSdpDirection(desc, "audio")
+                    Log.d(TAG, "Answer created: video=$answerHasVideo($answerVideoDirection), audio=$answerHasAudio($answerAudioDirection)")
+                    Log.d(TAG, "Answer SDP (first 500 chars): ${desc.take(500)}")
+
+                    if (!answerHasVideo) {
+                        Log.e(TAG, "CRITICAL: Answer does NOT contain m=video! Video will not work.")
+                    }
 
                     peerConnection?.setLocalDescription(object : SdpObserver {
                         override fun onCreateSuccess(sdp: SessionDescription?) {}
@@ -419,7 +444,16 @@ object DirectWebRTCManager {
 
         val rtcConfig = PeerConnection.RTCConfiguration(effectiveIceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+            // Keep gathering ICE candidates continuously (better for mobile networks)
+            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+            // Pre-gather ICE candidates to speed up connection
+            iceCandidatePoolSize = 10
+            // Enable TCP ICE candidates as fallback when UDP is blocked
+            // Note: TcpCandidatePolicy not available in google-webrtc 1.0.32006
+            // Try all network interfaces (WiFi, cellular, VPN)
+            candidateNetworkPolicy = PeerConnection.CandidateNetworkPolicy.ALL
         }
+        Log.d(TAG, "RTC config: ${effectiveIceServers.size} ICE servers, continualGathering, tcpEnabled, candidatePool=10")
 
         peerConnection = factory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onSignalingChange(state: PeerConnection.SignalingState?) {
@@ -435,10 +469,24 @@ object DirectWebRTCManager {
                         startStatsMonitor()
                     }
                     PeerConnection.IceConnectionState.FAILED -> {
-                        Log.e(TAG, "ICE connection FAILED")
-                        _connectionState.value = ConnectionState.ERROR
+                        Log.e(TAG, "ICE connection FAILED (attempt ${iceRestartAttempts + 1}/$maxIceRestartAttempts)")
                         statsMonitorJob?.cancel()
                         statsMonitorJob = null
+
+                        if (iceRestartAttempts < maxIceRestartAttempts) {
+                            iceRestartAttempts++
+                            Log.w(TAG, "ICE FAILED, will retry connection in 3s (attempt $iceRestartAttempts/$maxIceRestartAttempts)")
+                            // Cancel any pending restart
+                            iceRestartRunnable?.let { mainHandler.removeCallbacks(it) }
+                            iceRestartRunnable = Runnable {
+                                Log.d(TAG, "ICE restart attempt $iceRestartAttempts - reconnecting...")
+                                connect()
+                            }
+                            mainHandler.postDelayed(iceRestartRunnable!!, 3000)
+                        } else {
+                            Log.e(TAG, "ICE FAILED after $maxIceRestartAttempts retries, giving up")
+                            _connectionState.value = ConnectionState.ERROR
+                        }
                     }
                     // DISCONNECTED is often transient (network glitch), don't treat as ERROR.
                     // Only log it; if it recovers to CONNECTED the state will update.
@@ -463,6 +511,7 @@ object DirectWebRTCManager {
 
             override fun onIceCandidate(candidate: IceCandidate?) {
                 if (candidate != null) {
+                    Log.d(TAG, "Local ICE candidate: mid=${candidate.sdpMid}, idx=${candidate.sdpMLineIndex}, sdp=${candidate.sdp.take(60)}")
                     sendWsMessage(mapOf(
                         "type" to "ice_candidate",
                         "candidate" to candidate.sdp,
@@ -517,6 +566,21 @@ object DirectWebRTCManager {
             }
         })
 
+        // Add explicit video transceiver for receiving remote avatar video.
+        // In Unified Plan, this is more reliable than OfferToReceiveVideo constraint.
+        // Must be called BEFORE setRemoteDescription so it matches the offer's m=video.
+        try {
+            val videoTransceiver = peerConnection?.addTransceiver(
+                MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO,
+                RtpTransceiver.RtpTransceiverInit(
+                    RtpTransceiver.RtpTransceiverDirection.RECV_ONLY
+                )
+            )
+            Log.d(TAG, "Video RECV_ONLY transceiver added: $videoTransceiver")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to add video transceiver", e)
+        }
+
         // Add local audio track (microphone)
         try {
             val audioConstraints = MediaConstraints()
@@ -536,11 +600,16 @@ object DirectWebRTCManager {
         val candidate = json.get("candidate")?.asString ?: return
         if (candidate.isEmpty()) return
 
+        val sdpMid = json.get("sdp_mid")?.asString
+        val sdpMLineIndex = json.get("sdp_mline_index")?.asInt
+        Log.d(TAG, "Remote ICE candidate: mid=$sdpMid, idx=$sdpMLineIndex, sdp=${candidate.take(60)}")
+
         if (signalingReady && peerConnection != null) {
             addIceCandidateFromJson(json)
         } else {
             // Queue for later processing
             pendingIceCandidates.add(json)
+            Log.d(TAG, "Queued ICE candidate (signalingReady=$signalingReady, pc=${peerConnection != null}), queue=${pendingIceCandidates.size}")
         }
     }
 
@@ -705,6 +774,9 @@ object DirectWebRTCManager {
         sessionId = null
         signalingReady = false
         pendingIceCandidates.clear()
+        iceRestartAttempts = 0
+        iceRestartRunnable?.let { mainHandler.removeCallbacks(it) }
+        iceRestartRunnable = null
 
         // Cancel stats monitor
         statsMonitorJob?.cancel()
@@ -828,6 +900,31 @@ object DirectWebRTCManager {
     }
 
     private var statsMonitorJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * Extract the direction attribute for a specific media type from SDP.
+     * e.g., for video: finds "a=sendrecv" or "a=recvonly" etc. after m=video line.
+     */
+    private fun extractSdpDirection(sdp: String, mediaType: String): String {
+        val lines = sdp.lines()
+        var inTargetMedia = false
+        for (line in lines) {
+            if (line.startsWith("m=$mediaType")) {
+                inTargetMedia = true
+                continue
+            }
+            if (inTargetMedia && line.startsWith("m=")) {
+                break // moved to next media section
+            }
+            if (inTargetMedia && line.startsWith("a=")) {
+                val attr = line.substring(2)
+                if (attr == "sendrecv" || attr == "sendonly" || attr == "recvonly" || attr == "inactive") {
+                    return attr
+                }
+            }
+        }
+        return "unknown"
+    }
 
     /**
      * Simple SdpObserver with logging callbacks.
