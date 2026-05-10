@@ -325,6 +325,19 @@ object DirectWebRTCManager {
                     override fun onCreateSuccess(sdp: SessionDescription?) {}
                     override fun onSetSuccess() {
                         Log.d(TAG, "setRemoteDescription completed successfully")
+                        // CRITICAL: Only mark signaling ready and flush ICE candidates
+                        // AFTER setRemoteDescription has completed.
+                        // Adding ICE candidates before remote desc is set causes them
+                        // to be silently dropped, breaking the ICE connection.
+                        signalingReady = true
+                        val pending = pendingIceCandidates.toList()
+                        pendingIceCandidates.clear()
+                        if (pending.isNotEmpty()) {
+                            Log.d(TAG, "Flushing ${pending.size} pending ICE candidates after setRemoteSuccess")
+                            for (candidate in pending) {
+                                addIceCandidateFromJson(candidate)
+                            }
+                        }
                         // Only create answer AFTER setRemote is done
                         createAndSendAnswer()
                     }
@@ -336,14 +349,6 @@ object DirectWebRTCManager {
                         _connectionState.value = ConnectionState.ERROR
                     }
                 }, sdp)
-
-                signalingReady = true
-
-                // Flush any pending ICE candidates
-                for (candidate in pendingIceCandidates) {
-                    addIceCandidateFromJson(candidate)
-                }
-                pendingIceCandidates.clear()
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error handling WebRTC offer", e)
@@ -429,11 +434,16 @@ object DirectWebRTCManager {
                         _connectionState.value = ConnectionState.CONNECTED
                         startStatsMonitor()
                     }
-                    PeerConnection.IceConnectionState.FAILED,
-                    PeerConnection.IceConnectionState.DISCONNECTED -> {
+                    PeerConnection.IceConnectionState.FAILED -> {
+                        Log.e(TAG, "ICE connection FAILED")
                         _connectionState.value = ConnectionState.ERROR
                         statsMonitorJob?.cancel()
                         statsMonitorJob = null
+                    }
+                    // DISCONNECTED is often transient (network glitch), don't treat as ERROR.
+                    // Only log it; if it recovers to CONNECTED the state will update.
+                    PeerConnection.IceConnectionState.DISCONNECTED -> {
+                        Log.w(TAG, "ICE connection DISCONNECTED (may recover)")
                     }
                     PeerConnection.IceConnectionState.NEW,
                     PeerConnection.IceConnectionState.CHECKING -> {
