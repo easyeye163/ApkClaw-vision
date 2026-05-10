@@ -71,11 +71,16 @@ object DirectWebRTCManager {
     private var signalingReady = false
     private val pendingIceCandidates = mutableListOf<JsonObject>()
     @Volatile private var iceServers: List<PeerConnection.IceServer> = emptyList()
+    @Volatile private var configReceived = false  // Whether webrtc_config was received
 
     // ICE restart/retry tracking
-    private var iceRestartAttempts = 0
-    private val maxIceRestartAttempts = 2
+    @Volatile private var iceRestartAttempts = 0
+    private val maxIceRestartAttempts = 3
     private var iceRestartRunnable: Runnable? = null
+
+    // Diagnostic log collection
+    private val diagnosticLogs = mutableListOf<String>()
+    @Volatile private var lastConnectionError: String = "unknown"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -120,8 +125,10 @@ object DirectWebRTCManager {
      * 1. Create session via REST API
      * 2. Open WebSocket for signaling
      * 3. Negotiate WebRTC peer connection
+     *
+     * @param isRetry true if this is an ICE failure retry (don't reset retry counter)
      */
-    fun connect(): Boolean {
+    fun connect(isRetry: Boolean = false): Boolean {
         val apiBase = KVUtils.getCyberVerseApiBase().trim()
         val wsBase = KVUtils.getCyberVerseWsBase().trim()
         val characterId = KVUtils.getCyberVerseCharacterId().trim()
@@ -137,9 +144,11 @@ object DirectWebRTCManager {
         }
 
         // Use lightweight reset - do NOT destroy renderer or EglBase
-        resetConnection()
+        resetConnection(isRetry)
         _connectionState.value = ConnectionState.CONNECTING
-        Log.d(TAG, "Connecting to CyberVerse: api=$apiBase, ws=$wsBase, char=$characterId")
+        diagnosticLogs.clear()
+        addDiagnostic("connect(isRetry=$isRetry): api=$apiBase, ws=$wsBase, char=$characterId")
+        Log.d(TAG, "Connecting to CyberVerse (isRetry=$isRetry): api=$apiBase, ws=$wsBase, char=$characterId")
 
         Thread({
             try {
@@ -217,7 +226,9 @@ object DirectWebRTCManager {
                 signalingReady = false
                 pendingIceCandidates.clear()
                 iceServers = emptyList()
+                configReceived = false
 
+                addDiagnostic("WebSocket opened, sending webrtc_ready")
                 // Send webrtc_ready to trigger negotiation
                 sendWsMessage(mapOf("type" to "webrtc_ready"))
             }
@@ -278,7 +289,7 @@ object DirectWebRTCManager {
     private fun handleWebrtcConfig(json: JsonObject) {
         try {
             val serversArray = json.getAsJsonArray("ice_servers")
-            if (serversArray != null) {
+            if (serversArray != null && serversArray.size() > 0) {
                 iceServers = serversArray.map { server ->
                     val s = server.asJsonObject
                     val urls = if (s.has("urls")) {
@@ -296,6 +307,8 @@ object DirectWebRTCManager {
                         .setPassword(s.get("credential")?.asString ?: "")
                         .createIceServer()
                 }
+                configReceived = true
+                addDiagnostic("webrtc_config: ${iceServers.size} ICE servers received")
                 Log.d(TAG, "ICE servers configured: ${iceServers.size} servers")
                 // Log each ICE server type for debugging
                 iceServers.forEachIndexed { i, server ->
@@ -303,10 +316,28 @@ object DirectWebRTCManager {
                     val hasTurn = serverUrls.contains("turn")
                     val hasStun = serverUrls.contains("stun")
                     val hasTcp = serverUrls.contains("?transport=tcp") || serverUrls.contains("tcp:")
+                    addDiagnostic("  ICE[$i]: ${if (hasTurn) "TURN" else if (hasStun) "STUN" else "?"} $serverUrls auth=${server.username.isNotEmpty()}")
                     Log.d(TAG, "  ICE server[$i]: type=${if (hasTurn) "TURN" else if (hasStun) "STUN" else "UNKNOWN"}, urls=$serverUrls, hasAuth=${server.username.isNotEmpty()}, tcp=$hasTcp")
                 }
+                // If no TURN server, add warning - mobile NAT traversal likely needs TURN
+                val hasTurn = iceServers.any { it.urls.any { u -> u.contains("turn") } }
+                if (!hasTurn) {
+                    addDiagnostic("WARNING: No TURN server! Mobile NAT may block ICE connection.")
+                    Log.w(TAG, "WARNING: No TURN server configured! Mobile NAT may block P2P connection.")
+                }
+
+                // Process pending offer if it arrived before config
+                pendingOffer?.let { offer ->
+                    addDiagnostic("Processing pending offer (arrived before config)")
+                    pendingOffer = null
+                    handleWebrtcOffer(offer)
+                }
+            } else {
+                addDiagnostic("webrtc_config: no ice_servers array or empty!")
+                Log.w(TAG, "webrtc_config received but no ice_servers!")
             }
         } catch (e: Exception) {
+            addDiagnostic("webrtc_config parse error: ${e.message}")
             Log.w(TAG, "Error parsing ICE config", e)
         }
     }
@@ -316,6 +347,8 @@ object DirectWebRTCManager {
      * CRITICAL: Must wait for setRemoteDescription to complete before createAnswer,
      * otherwise the answer will be malformed and no video track will be negotiated.
      */
+    private var pendingOffer: JsonObject? = null
+
     private fun handleWebrtcOffer(json: JsonObject) {
         val sdpStr = json.get("sdp")?.asString ?: return
         Log.d(TAG, "Received WebRTC offer (${sdpStr.length} chars)")
@@ -325,10 +358,25 @@ object DirectWebRTCManager {
         val hasAudioMline = sdpStr.contains("m=audio")
         val offerVideoDir = extractSdpDirection(sdpStr, "video")
         val offerAudioDir = extractSdpDirection(sdpStr, "audio")
+        addDiagnostic("webrtc_offer: ${sdpStr.length} chars, audio=$hasAudioMline($offerAudioDir), video=$hasVideoMline($offerVideoDir)")
         Log.d(TAG, "Offer SDP (${sdpStr.length} chars): audio=$hasAudioMline($offerAudioDir), video=$hasVideoMline($offerVideoDir)")
         Log.d(TAG, "Offer SDP (first 500 chars): ${sdpStr.take(500)}")
         if (!hasVideoMline) {
+            addDiagnostic("CRITICAL: Offer has NO m=video line!")
             Log.w(TAG, "WARNING: SDP offer does NOT contain video media line! Server may not support video.")
+        }
+
+        // Check if ICE candidates from offer's SDP (non-trickle)
+        val candidateLines = sdpStr.lines().filter { it.startsWith("a=candidate") }.size
+        if (candidateLines > 0) {
+            addDiagnostic("Offer contains $candidateLines embedded ICE candidates (non-trickle)")
+        }
+
+        if (!configReceived) {
+            addDiagnostic("webrtc_offer arrived BEFORE webrtc_config! Queuing offer...")
+            Log.w(TAG, "Offer arrived before config - queuing offer until config received")
+            pendingOffer = json
+            return
         }
 
         mainHandler.post {
@@ -361,6 +409,8 @@ object DirectWebRTCManager {
                         Log.e(TAG, "setRemoteDescription onCreateFailure: $error")
                     }
                     override fun onSetFailure(error: String?) {
+                        lastConnectionError = "setRemoteDescription: $error"
+                        addDiagnostic("setRemoteDescription FAILED: $error")
                         Log.e(TAG, "setRemoteDescription FAILED: $error")
                         _connectionState.value = ConnectionState.ERROR
                     }
@@ -435,11 +485,19 @@ object DirectWebRTCManager {
     private fun createPeerConnection() {
         val factory = peerConnectionFactory ?: return
 
-        // Default STUN server if none configured
+        // Build effective ICE server list: server-provided + fallback STUN servers
+        val fallbackStunServers = listOf(
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun3.l.google.com:19302").createIceServer()
+        )
         val effectiveIceServers = if (iceServers.isEmpty()) {
-            listOf(PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer())
+            addDiagnostic("No server ICE servers, using ${fallbackStunServers.size} fallback STUN servers")
+            fallbackStunServers
         } else {
-            iceServers
+            addDiagnostic("Using ${iceServers.size} server ICE servers + ${fallbackStunServers.size} fallback STUN")
+            iceServers + fallbackStunServers
         }
 
         val rtcConfig = PeerConnection.RTCConfiguration(effectiveIceServers).apply {
@@ -448,12 +506,15 @@ object DirectWebRTCManager {
             continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
             // Pre-gather ICE candidates to speed up connection
             iceCandidatePoolSize = 10
-            // Enable TCP ICE candidates as fallback when UDP is blocked
-            // Note: TcpCandidatePolicy not available in google-webrtc 1.0.32006
             // Try all network interfaces (WiFi, cellular, VPN)
             candidateNetworkPolicy = PeerConnection.CandidateNetworkPolicy.ALL
+            // Bundle all media on single transport (reduces ICE pairs needed)
+            bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
+            // Multiplex RTCP over RTP transport (simplifies ICE)
+            rtcpMuxPolicy = PeerConnection.RtcpMuxPolicy.REQUIRE
         }
-        Log.d(TAG, "RTC config: ${effectiveIceServers.size} ICE servers, continualGathering, tcpEnabled, candidatePool=10")
+        addDiagnostic("RTC config: ${effectiveIceServers.size} ICE servers, MAXBUNDLE, RTCP_MUX_REQUIRE")
+        Log.d(TAG, "RTC config: ${effectiveIceServers.size} ICE servers, continualGathering, MAXBUNDLE, rtcpMuxRequire, candidatePool=10")
 
         peerConnection = factory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
             override fun onSignalingChange(state: PeerConnection.SignalingState?) {
@@ -469,21 +530,25 @@ object DirectWebRTCManager {
                         startStatsMonitor()
                     }
                     PeerConnection.IceConnectionState.FAILED -> {
+                        lastConnectionError = "ICE_FAILED"
+                        addDiagnostic("ICE FAILED (attempt ${iceRestartAttempts + 1}/$maxIceRestartAttempts)")
                         Log.e(TAG, "ICE connection FAILED (attempt ${iceRestartAttempts + 1}/$maxIceRestartAttempts)")
                         statsMonitorJob?.cancel()
                         statsMonitorJob = null
 
                         if (iceRestartAttempts < maxIceRestartAttempts) {
                             iceRestartAttempts++
+                            addDiagnostic("Scheduling retry $iceRestartAttempts/$maxIceRestartAttempts in 3s...")
                             Log.w(TAG, "ICE FAILED, will retry connection in 3s (attempt $iceRestartAttempts/$maxIceRestartAttempts)")
                             // Cancel any pending restart
                             iceRestartRunnable?.let { mainHandler.removeCallbacks(it) }
                             iceRestartRunnable = Runnable {
                                 Log.d(TAG, "ICE restart attempt $iceRestartAttempts - reconnecting...")
-                                connect()
+                                connect(isRetry = true)
                             }
                             mainHandler.postDelayed(iceRestartRunnable!!, 3000)
                         } else {
+                            addDiagnostic("ICE FAILED after all retries. DIAGNOSTIC: ${getDiagnosticSummary()}")
                             Log.e(TAG, "ICE FAILED after $maxIceRestartAttempts retries, giving up")
                             _connectionState.value = ConnectionState.ERROR
                         }
@@ -764,7 +829,7 @@ object DirectWebRTCManager {
      * Lightweight connection reset - closes WS + PeerConnection but preserves
      * renderer and EglBase (they have app-level lifetime).
      */
-    private fun resetConnection() {
+    private fun resetConnection(isRetry: Boolean = false) {
         try {
             webSocket?.close(1000, "reset")
         } catch (e: Exception) {
@@ -774,7 +839,9 @@ object DirectWebRTCManager {
         sessionId = null
         signalingReady = false
         pendingIceCandidates.clear()
-        iceRestartAttempts = 0
+        pendingOffer = null
+        configReceived = false
+        // NOTE: Do NOT reset iceRestartAttempts here - only reset on explicit user disconnect
         iceRestartRunnable?.let { mainHandler.removeCallbacks(it) }
         iceRestartRunnable = null
 
@@ -798,8 +865,21 @@ object DirectWebRTCManager {
         } catch (_: Exception) {}
         peerConnection = null
 
-        _connectionState.value = ConnectionState.DISCONNECTED
+        // Don't change connectionState here - let the caller decide
+        // (connect() sets it to CONNECTING, disconnect() sets it to DISCONNECTED)
+        if (peerConnection == null && webSocket == null) {
+            _connectionState.value = ConnectionState.DISCONNECTED
+        }
         _avatarStatus.value = AvatarStatus.IDLE
+    }
+
+    /**
+     * Reset ICE retry counter (call on user-initiated disconnect only).
+     */
+    private fun resetRetryCounter() {
+        iceRestartAttempts = 0
+        iceRestartRunnable?.let { mainHandler.removeCallbacks(it) }
+        iceRestartRunnable = null
     }
 
     /**
@@ -807,7 +887,9 @@ object DirectWebRTCManager {
      * Does NOT destroy renderer or EglBase - those have app-level lifetime.
      */
     fun disconnect() {
+        resetRetryCounter()  // User explicitly disconnected, reset retry counter
         resetConnection()
+        _connectionState.value = ConnectionState.DISCONNECTED
     }
 
     /**
@@ -815,6 +897,7 @@ object DirectWebRTCManager {
      * Only call when the app is being destroyed.
      */
     fun destroy() {
+        resetRetryCounter()  // Reset on app destroy
         disconnect()
         unbindRenderer()
 
@@ -925,6 +1008,43 @@ object DirectWebRTCManager {
         }
         return "unknown"
     }
+
+    /**
+     * Add a diagnostic log entry.
+     */
+    private fun addDiagnostic(msg: String) {
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+        diagnosticLogs.add("[$timestamp] $msg")
+        // Keep last 50 entries
+        while (diagnosticLogs.size > 50) diagnosticLogs.removeAt(0)
+    }
+
+    /**
+     * Get diagnostic summary for debugging.
+     */
+    fun getDiagnosticSummary(): String {
+        val sb = StringBuilder()
+        sb.appendLine("=== WebRTC Diagnostic ===")
+        sb.appendLine("Connection: ${_connectionState.value}")
+        sb.appendLine("Last error: $lastConnectionError")
+        sb.appendLine("ICE restart attempts: $iceRestartAttempts")
+        sb.appendLine("Config received: $configReceived")
+        sb.appendLine("Signaling ready: $signalingReady")
+        sb.appendLine("Remote video track: ${remoteVideoTrack != null}")
+        sb.appendLine("Pending ICE candidates: ${pendingIceCandidates.size}")
+        sb.appendLine("ICE servers: ${iceServers.size}")
+        sb.appendLine()
+        sb.appendLine("--- Log ---")
+        for (log in diagnosticLogs) {
+            sb.appendLine(log)
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Get last connection error reason.
+     */
+    fun getLastConnectionError(): String = lastConnectionError
 
     /**
      * Simple SdpObserver with logging callbacks.
