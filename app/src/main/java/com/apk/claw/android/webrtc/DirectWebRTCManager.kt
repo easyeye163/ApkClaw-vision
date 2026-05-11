@@ -288,7 +288,15 @@ object DirectWebRTCManager {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val json = JsonParser.parseString(text).asJsonObject
-                    val type = json.get("type")?.asString ?: return
+                    val type = json.get("type")?.asString
+                    if (type == null) {
+                        Log.d(TAG, "WS message without type field: ${text.take(100)}")
+                        return
+                    }
+                    // Log ALL incoming message types for diagnostics
+                    if (type != "ice_candidate") {
+                        Log.d(TAG, "WS recv: type=$type")
+                    }
                     handleMessage(type, json)
                 } catch (e: Exception) {
                     Log.w(TAG, "Error parsing WS message", e)
@@ -775,6 +783,7 @@ object DirectWebRTCManager {
      */
     private fun handleAvatarStatus(json: JsonObject) {
         val status = json.get("status")?.asString ?: return
+        Log.d(TAG, "avatar_status received: $status (current=${_avatarStatus.value.name})")
         mainHandler.post {
             _avatarStatus.value = when (status) {
                 "speaking" -> AvatarStatus.SPEAKING
@@ -923,6 +932,7 @@ object DirectWebRTCManager {
             Log.w(TAG, "Cannot send text - not connected")
             return
         }
+        Log.d(TAG, "Sending text_input: ${text.take(50)}...")
         sendWsMessage(mapOf("type" to "text_input", "text" to text))
     }
 

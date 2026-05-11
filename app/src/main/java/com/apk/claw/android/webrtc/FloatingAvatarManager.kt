@@ -435,7 +435,7 @@ object FloatingAvatarManager {
         if (!hasVideoFlow) {
             hasVideoFlow = true
             lastWebRTCFrameTime = System.currentTimeMillis()
-            Log.d(TAG, "Switching to WebRTC display mode")
+            Log.d(TAG, "Switching to WebRTC display mode (renderer VISIBLE, standby GONE)")
         }
         renderer?.visibility = View.VISIBLE
         standbyTextureView?.visibility = View.GONE
@@ -457,8 +457,12 @@ object FloatingAvatarManager {
         if (standbyMediaPlayer == null && idleVideoUrls.isNotEmpty() && standbySurfaceReady) {
             val ctx = appContext ?: return
             playIdleVideo(ctx)
+            Log.d(TAG, "Switching to standby display mode (standby playing, renderer GONE)")
+        } else if (standbyMediaPlayer != null) {
+            Log.d(TAG, "Switching to standby display mode (standby already playing, renderer GONE)")
+        } else {
+            Log.d(TAG, "Switching to standby display mode (no standby player, renderer GONE)")
         }
-        Log.d(TAG, "Switching to standby display mode")
     }
 
     /**
