@@ -18,6 +18,7 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import org.webrtc.*
+import java.net.URL
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +78,7 @@ object DirectWebRTCManager {
     private val pendingIceCandidates = mutableListOf<JsonObject>()
     @Volatile private var iceServers: List<PeerConnection.IceServer> = emptyList()
     @Volatile private var configReceived = false  // Whether webrtc_config was received
+    @Volatile private var apiBaseUrlOrigin = ""  // e.g. "http://host" for resolving relative idle URLs
 
     // Timeout for webrtc_config - if server doesn't send it, proceed with fallback STUN
     private var configTimeoutRunnable: Runnable? = null
@@ -209,6 +211,15 @@ object DirectWebRTCManager {
             Log.d(TAG, "Session response body keys: ${json.keySet().joinToString(", ")}")
 
             // Parse idle video URLs from session response
+            // Server may return relative paths like /api/v1/characters/.../idle-videos/...
+            // which must be resolved to full URLs for Android MediaPlayer.
+            apiBaseUrlOrigin = try {
+                val parsed = URL(apiBase)
+                "${parsed.protocol}://${parsed.host}"
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse apiBase origin: $apiBase")
+                ""
+            }
             val idleUrls = mutableListOf<String>()
             val idleVideoUrl = json.get("idle_video_url")?.asString
             val idleVideoUrlsArray = json.getAsJsonArray("idle_video_urls")
@@ -216,6 +227,16 @@ object DirectWebRTCManager {
                 idleUrls.addAll(idleVideoUrlsArray.map { it.asString })
             } else if (!idleVideoUrl.isNullOrEmpty()) {
                 idleUrls.add(idleVideoUrl)
+            }
+            // Resolve relative URLs to absolute
+            if (apiBaseUrlOrigin.isNotEmpty() && idleUrls.any { it.startsWith("/") }) {
+                val resolved = idleUrls.map { url ->
+                    if (url.startsWith("http://") || url.startsWith("https://")) url
+                    else "$apiBaseUrlOrigin$url"
+                }
+                idleUrls.clear()
+                idleUrls.addAll(resolved)
+                Log.d(TAG, "Resolved relative idle URLs with base origin: $apiBaseUrlOrigin")
             }
             if (idleUrls.isNotEmpty()) {
                 _idleVideoUrls.value = idleUrls
@@ -769,16 +790,27 @@ object DirectWebRTCManager {
     private fun handleIdleVideoReady(json: JsonObject) {
         val urlsArray = json.getAsJsonArray("urls")
         val singleUrl = json.get("url")?.asString
-        if (urlsArray != null && urlsArray.size() > 0) {
-            val urls = urlsArray.map { it.asString }
-            _idleVideoUrls.value = urls
-            addDiagnostic("idle_video_ready: ${urls.size} URLs received")
-            Log.d(TAG, "Idle video ready: ${urls.size} URLs")
+        val rawUrls: List<String> = if (urlsArray != null && urlsArray.size() > 0) {
+            urlsArray.map { it.asString }
         } else if (!singleUrl.isNullOrEmpty()) {
-            _idleVideoUrls.value = listOf(singleUrl)
-            addDiagnostic("idle_video_ready: 1 URL received")
-            Log.d(TAG, "Idle video ready: $singleUrl")
+            listOf(singleUrl)
+        } else {
+            return
         }
+
+        // Resolve relative URLs to absolute using stored apiBaseUrlOrigin
+        val resolvedUrls = if (apiBaseUrlOrigin.isNotEmpty()) {
+            rawUrls.map { url ->
+                if (url.startsWith("http://") || url.startsWith("https://")) url
+                else "$apiBaseUrlOrigin$url"
+            }
+        } else {
+            rawUrls
+        }
+
+        _idleVideoUrls.value = resolvedUrls
+        addDiagnostic("idle_video_ready: ${resolvedUrls.size} URLs received")
+        Log.d(TAG, "Idle video ready: ${resolvedUrls.size} URLs, first=${resolvedUrls.firstOrNull()?.take(100)}")
     }
 
     /**

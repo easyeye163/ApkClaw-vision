@@ -342,7 +342,13 @@ object FloatingAvatarManager {
         val hadUrls = idleVideoUrls.isNotEmpty()
         idleVideoUrls = newUrls
         currentIdleVideoIndex = 0
-        Log.d(TAG, "Idle video URLs updated: ${newUrls.size} urls")
+        Log.d(TAG, "Idle video URLs updated: ${newUrls.size} urls, first=${newUrls.firstOrNull()?.take(100)}")
+        // Warn if any URL looks like a relative path (should have been resolved already)
+        newUrls.forEach { url ->
+            if (url.startsWith("/") && !url.startsWith("//")) {
+                Log.w(TAG, "WARNING: Idle video URL looks like a relative path: $url")
+            }
+        }
 
         val ctx = appContext ?: return
         if (standbySurfaceReady) {
@@ -388,7 +394,13 @@ object FloatingAvatarManager {
                     }
                 }
                 setOnErrorListener { _, what, extra ->
-                    Log.e(TAG, "Standby video error: what=$what extra=$extra, url=${url.take(60)}")
+                    Log.e(TAG, "Standby video error: what=$what extra=$extra, url=${url.take(120)}")
+                    // If URL looks like a relative path, log helpful hint
+                    if (url.startsWith("/")) {
+                        Log.e(TAG, "ERROR: Idle video URL is a relative path (starts with '/')! " +
+                                "MediaPlayer requires absolute URL (http://...). " +
+                                "Check DirectWebRTCManager.createSession() URL resolution.")
+                    }
                     // Try next video if available
                     if (idleVideoUrls.size > 1) {
                         currentIdleVideoIndex = (currentIdleVideoIndex + 1) % idleVideoUrls.size
