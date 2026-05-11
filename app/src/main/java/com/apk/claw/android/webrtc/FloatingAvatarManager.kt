@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Floating avatar window manager (singleton).
- * Shows a small draggable overlay (120dp circle) with the WebRTC video renderer for digital avatar.
+ * Shows a draggable/resizable overlay with the WebRTC video renderer for digital avatar.
  * Falls back to a local test MP4 when WebRTC video is not available.
  */
 object FloatingAvatarManager {
@@ -35,7 +35,10 @@ object FloatingAvatarManager {
     private const val TAG = "FloatingAvatarManager"
     private const val PREF_X = "floating_avatar_x"
     private const val PREF_Y = "floating_avatar_y"
-    private val AVATAR_SIZE_DP = 120
+    private const val PREF_SIZE = "floating_avatar_size"
+    private val DEFAULT_SIZE_DP = 120
+    private val MIN_SIZE_DP = 60
+    private val MAX_SIZE_DP = 300
 
     private var windowManager: WindowManager? = null
     private var avatarView: View? = null
@@ -44,12 +47,17 @@ object FloatingAvatarManager {
     private var fallbackMediaPlayer: MediaPlayer? = null
     private var statusIndicator: ImageView? = null
     private var speakingIndicator: View? = null
+    private var resizeHandle: View? = null
 
     private var isDragging = false
+    private var isResizing = false
     private var initialX = 0
     private var initialY = 0
     private var initialTouchX = 0f
     private var initialTouchY = 0f
+    private var initialSize = 0
+
+    private var currentSizeDp = DEFAULT_SIZE_DP
 
     private var observeConnectionJob: Job? = null
     private var observeAvatarStatusJob: Job? = null
@@ -82,7 +90,9 @@ object FloatingAvatarManager {
         val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         windowManager = wm
 
-        val sizePx = (AVATAR_SIZE_DP * ctx.resources.displayMetrics.density).toInt()
+        // Restore saved size or use default
+        currentSizeDp = KVUtils.getInt(PREF_SIZE, DEFAULT_SIZE_DP)
+        val sizePx = (currentSizeDp * ctx.resources.displayMetrics.density).toInt()
 
         // Create the video renderer (org.webrtc.SurfaceViewRenderer)
         renderer = SurfaceViewRenderer(ctx).apply {
@@ -101,6 +111,7 @@ object FloatingAvatarManager {
             container?.addView(renderer)
             statusIndicator = view.findViewById(R.id.ivAvatarStatus)
             speakingIndicator = view.findViewById(R.id.speakingIndicator)
+            resizeHandle = view.findViewById(R.id.resizeHandle)
         }
 
         val params = createWindowParams(sizePx)
@@ -113,42 +124,14 @@ object FloatingAvatarManager {
             params.y = savedY
         }
 
-        // Touch handling for dragging
+        // Touch handling for dragging (on the root view)
         avatarView?.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    isDragging = false
-                    initialX = params.x
-                    initialY = params.y
-                    initialTouchX = event.rawX
-                    initialTouchY = event.rawY
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - initialTouchX
-                    val dy = event.rawY - initialTouchY
-                    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                        isDragging = true
-                    }
-                    params.x = initialX + dx.toInt()
-                    params.y = initialY + dy.toInt()
-                    try {
-                        windowManager?.updateViewLayout(avatarView, params)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error updating avatar position", e)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (isDragging) {
-                        // Save position
-                        KVUtils.putInt(PREF_X, params.x)
-                        KVUtils.putInt(PREF_Y, params.y)
-                    }
-                    true
-                }
-                else -> false
-            }
+            handleTouch(event, params)
+        }
+
+        // Separate touch handling for resize handle
+        resizeHandle?.setOnTouchListener { _, event ->
+            handleResizeTouch(event, params)
         }
 
         try {
@@ -179,7 +162,130 @@ object FloatingAvatarManager {
             DirectWebRTCManager.connect()
         }
 
-        Log.d(TAG, "Floating avatar shown")
+        Log.d(TAG, "Floating avatar shown (size=${currentSizeDp}dp)")
+    }
+
+    /**
+     * Handle touch events for dragging the floating avatar.
+     */
+    private fun handleTouch(event: MotionEvent, params: WindowManager.LayoutParams): Boolean {
+        return when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                isDragging = false
+                initialX = params.x
+                initialY = params.y
+                initialTouchX = event.rawX
+                initialTouchY = event.rawY
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = event.rawX - initialTouchX
+                val dy = event.rawY - initialTouchY
+                if (!isDragging && !isResizing) {
+                    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                        isDragging = true
+                        // Show resize handle when user starts interacting
+                        resizeHandle?.visibility = View.VISIBLE
+                        resizeHandle?.alpha = 0.6f
+                    }
+                }
+                if (isDragging) {
+                    params.x = initialX + dx.toInt()
+                    params.y = initialY + dy.toInt()
+                    try {
+                        windowManager?.updateViewLayout(avatarView, params)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error updating avatar position", e)
+                    }
+                }
+                true
+            }
+            MotionEvent.ACTION_UP -> {
+                if (isDragging) {
+                    // Save position
+                    KVUtils.putInt(PREF_X, params.x)
+                    KVUtils.putInt(PREF_Y, params.y)
+                }
+                // Hide resize handle after 2 seconds of inactivity
+                if (!isResizing) {
+                    resizeHandle?.postDelayed({
+                        if (!isDragging && !isResizing) {
+                            resizeHandle?.animate()?.alpha(0f)?.withEndAction {
+                                resizeHandle?.visibility = View.GONE
+                            }?.start()
+                        }
+                    }, 2000)
+                }
+                isDragging = false
+                true
+            }
+            else -> false
+        }
+    }
+
+    /**
+     * Handle touch events for resizing the floating avatar (bottom-right corner).
+     * Resizes proportionally (maintains square aspect ratio).
+     */
+    private fun handleResizeTouch(event: MotionEvent, params: WindowManager.LayoutParams): Boolean {
+        val ctx = appContext ?: return false
+        val density = ctx.resources.displayMetrics.density
+
+        return when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                isResizing = true
+                isDragging = false
+                initialTouchX = event.rawX
+                initialTouchY = event.rawY
+                initialSize = (params.width / density).toInt()
+                // Keep resize handle visible
+                resizeHandle?.visibility = View.VISIBLE
+                resizeHandle?.alpha = 0.8f
+                true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                // Use the larger of dx/dy to keep it square (proportional)
+                val dx = event.rawX - initialTouchX
+                val dy = event.rawY - initialTouchY
+                val deltaDp = (Math.max(dx, dy) / density).toInt()
+
+                var newSizeDp = initialSize + deltaDp
+                // Clamp to min/max bounds
+                newSizeDp = newSizeDp.coerceIn(MIN_SIZE_DP, MAX_SIZE_DP)
+
+                val newSizePx = (newSizeDp * density).toInt()
+                if (newSizePx != params.width) {
+                    params.width = newSizePx
+                    params.height = newSizePx
+                    currentSizeDp = newSizeDp
+                    try {
+                        windowManager?.updateViewLayout(avatarView, params)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error resizing avatar", e)
+                    }
+                }
+                true
+            }
+            MotionEvent.ACTION_UP -> {
+                isResizing = false
+                // Save size
+                KVUtils.putInt(PREF_SIZE, currentSizeDp)
+                // Also save position since resize might shift it
+                KVUtils.putInt(PREF_X, params.x)
+                KVUtils.putInt(PREF_Y, params.y)
+                Log.d(TAG, "Avatar resized to ${currentSizeDp}dp, saved")
+                // Fade out resize handle after 2 seconds
+                resizeHandle?.postDelayed({
+                    if (!isDragging && !isResizing) {
+                        resizeHandle?.animate()?.alpha(0f)?.withEndAction {
+                            resizeHandle?.visibility = View.GONE
+                        }?.start()
+                    }
+                }, 2000)
+                true
+            }
+            else -> false
+        }
     }
 
     /**
@@ -196,7 +302,7 @@ object FloatingAvatarManager {
                                 "test_avatar", "raw", ctx.packageName
                             )
                             if (resId != 0) {
-                                setDataSource(ctx, 
+                                setDataSource(ctx,
                                     android.net.Uri.parse("android.resource://${ctx.packageName}/$resId"))
                             }
                             setSurface(surface)
@@ -302,6 +408,9 @@ object FloatingAvatarManager {
         fallbackTextureView = null
         statusIndicator = null
         speakingIndicator = null
+        resizeHandle = null
+        isDragging = false
+        isResizing = false
         Log.d(TAG, "Floating avatar hidden")
     }
 
