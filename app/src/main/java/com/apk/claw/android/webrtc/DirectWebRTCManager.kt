@@ -73,6 +73,10 @@ object DirectWebRTCManager {
     @Volatile private var iceServers: List<PeerConnection.IceServer> = emptyList()
     @Volatile private var configReceived = false  // Whether webrtc_config was received
 
+    // Timeout for webrtc_config - if server doesn't send it, proceed with fallback STUN
+    private var configTimeoutRunnable: Runnable? = null
+    private val CONFIG_TIMEOUT_MS = 3000L  // 3 seconds
+
     // ICE restart/retry tracking
     @Volatile private var iceRestartAttempts = 0
     private val maxIceRestartAttempts = 3
@@ -227,6 +231,9 @@ object DirectWebRTCManager {
                 pendingIceCandidates.clear()
                 iceServers = emptyList()
                 configReceived = false
+                pendingOffer = null
+                configTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+                configTimeoutRunnable = null
 
                 addDiagnostic("WebSocket opened, sending webrtc_ready")
                 // Send webrtc_ready to trigger negotiation
@@ -308,6 +315,9 @@ object DirectWebRTCManager {
                         .createIceServer()
                 }
                 configReceived = true
+                // Cancel the config timeout since we received config
+                configTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+                configTimeoutRunnable = null
                 addDiagnostic("webrtc_config: ${iceServers.size} ICE servers received")
                 Log.d(TAG, "ICE servers configured: ${iceServers.size} servers")
                 // Log each ICE server type for debugging
@@ -333,8 +343,15 @@ object DirectWebRTCManager {
                     handleWebrtcOffer(offer)
                 }
             } else {
-                addDiagnostic("webrtc_config: no ice_servers array or empty!")
-                Log.w(TAG, "webrtc_config received but no ice_servers!")
+                addDiagnostic("webrtc_config: no ice_servers array or empty, proceeding with fallback STUN")
+                Log.w(TAG, "webrtc_config received but no ice_servers - using fallback STUN")
+                configReceived = true
+                // Process pending offer even without ICE servers
+                pendingOffer?.let { offer ->
+                    addDiagnostic("Processing pending offer (config had no ice_servers)")
+                    pendingOffer = null
+                    handleWebrtcOffer(offer)
+                }
             }
         } catch (e: Exception) {
             addDiagnostic("webrtc_config parse error: ${e.message}")
@@ -373,9 +390,25 @@ object DirectWebRTCManager {
         }
 
         if (!configReceived) {
-            addDiagnostic("webrtc_offer arrived BEFORE webrtc_config! Queuing offer...")
-            Log.w(TAG, "Offer arrived before config - queuing offer until config received")
+            addDiagnostic("webrtc_offer arrived BEFORE webrtc_config! Starting 3s timeout, will proceed with fallback STUN if no config...")
+            Log.w(TAG, "Offer arrived before config - starting ${CONFIG_TIMEOUT_MS}ms timeout")
             pendingOffer = json
+            // Cancel any previous timeout
+            configTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+            // Start timeout - if no config arrives, proceed with fallback STUN servers
+            val timeoutRunnable = Runnable {
+                if (!configReceived && pendingOffer != null) {
+                    addDiagnostic("Timeout waiting for webrtc_config, proceeding with fallback STUN servers")
+                    Log.w(TAG, "Timeout waiting for webrtc_config, proceeding with fallback STUN servers")
+                    configReceived = true  // Mark as received to allow processing
+                    val offer = pendingOffer
+                    pendingOffer = null
+                    configTimeoutRunnable = null
+                    handleWebrtcOffer(offer!!)
+                }
+            }
+            configTimeoutRunnable = timeoutRunnable
+            mainHandler.postDelayed(timeoutRunnable, CONFIG_TIMEOUT_MS)
             return
         }
 
@@ -841,6 +874,8 @@ object DirectWebRTCManager {
         pendingIceCandidates.clear()
         pendingOffer = null
         configReceived = false
+        configTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        configTimeoutRunnable = null
         // NOTE: Do NOT reset iceRestartAttempts here - only reset on explicit user disconnect
         iceRestartRunnable?.let { mainHandler.removeCallbacks(it) }
         iceRestartRunnable = null
