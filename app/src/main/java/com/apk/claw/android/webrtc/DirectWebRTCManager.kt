@@ -206,10 +206,11 @@ object DirectWebRTCManager {
             val json = JsonParser.parseString(respStr).asJsonObject
             val sid = json.get("session_id")?.asString
             Log.d(TAG, "Session response: streaming_mode=${json.get("streaming_mode")?.asString}")
+            Log.d(TAG, "Session response body keys: ${json.keySet().joinToString(", ")}")
 
             // Parse idle video URLs from session response
             val idleUrls = mutableListOf<String>()
- val idleVideoUrl = json.get("idle_video_url")?.asString
+            val idleVideoUrl = json.get("idle_video_url")?.asString
             val idleVideoUrlsArray = json.getAsJsonArray("idle_video_urls")
             if (idleVideoUrlsArray != null && idleVideoUrlsArray.size() > 0) {
                 idleUrls.addAll(idleVideoUrlsArray.map { it.asString })

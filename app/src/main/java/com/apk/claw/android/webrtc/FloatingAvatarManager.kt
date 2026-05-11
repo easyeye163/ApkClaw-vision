@@ -23,7 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -86,11 +86,8 @@ object FloatingAvatarManager {
 
     // Coroutine jobs
     private var observeConnectionJob: Job? = null
-    private var observeAvatarStatusJob: Job? = null
-    private var observeIdleUrlsJob: Job? = null
     private var videoFlowCheckJob: Job? = null
     private var displayModeJob: Job? = null
-    private var idleCycleJob: Job? = null
 
     /**
      * Show the floating avatar window.
@@ -490,16 +487,10 @@ object FloatingAvatarManager {
     fun hide() {
         observeConnectionJob?.cancel()
         observeConnectionJob = null
-        observeAvatarStatusJob?.cancel()
-        observeAvatarStatusJob = null
-        observeIdleUrlsJob?.cancel()
-        observeIdleUrlsJob = null
-        videoFlowCheckJob?.cancel()
-        videoFlowCheckJob = null
         displayModeJob?.cancel()
         displayModeJob = null
-        idleCycleJob?.cancel()
-        idleCycleJob = null
+        videoFlowCheckJob?.cancel()
+        videoFlowCheckJob = null
 
         stopStandbyVideo()
         hasVideoFlow = false
@@ -567,38 +558,84 @@ object FloatingAvatarManager {
 
     /**
      * Observe all state flows and manage display mode switching.
+     * Uses a single combined flow to avoid race conditions between
+     * connection state, avatar status, and idle video URLs.
      * Mirrors the Vue SessionPage.vue displayMode computed property.
      */
     private fun observeState() {
-        // Observe idle video URLs (from session creation or idle_video_ready WS message)
-        observeIdleUrlsJob = CoroutineScope(Dispatchers.Main).launch {
-            DirectWebRTCManager.idleVideoUrls
-                .collect { urls ->
-                    if (urls.isNotEmpty()) {
-                        onIdleVideoUrlsUpdated(urls)
+        // Single combined flow: recomputes display mode whenever any input changes
+        displayModeJob = CoroutineScope(Dispatchers.Main).launch {
+            combine(
+                DirectWebRTCManager.connectionState,
+                DirectWebRTCManager.avatarStatus,
+                DirectWebRTCManager.idleVideoUrls
+            ) { connState, avatarStatus, idleUrls ->
+                Triple(connState, avatarStatus, idleUrls)
+            }.collect { (connState, avatarStatus, idleUrls) ->
+                // Update idle video URLs and start playing if new
+                val newUrls = idleUrls.filter { it.isNotBlank() }
+                if (newUrls != idleVideoUrls) {
+                    if (newUrls.isNotEmpty()) {
+                        onIdleVideoUrlsUpdated(newUrls)
                     }
                 }
-        }
 
-        // Observe connection state for status indicator
-        observeConnectionJob = CoroutineScope(Dispatchers.Main).launch {
-            DirectWebRTCManager.connectionState.collect { state ->
-                when (state) {
+                // Update speaking indicator
+                when (avatarStatus) {
+                    DirectWebRTCManager.AvatarStatus.SPEAKING -> {
+                        speakingIndicator?.visibility = View.VISIBLE
+                    }
+                    DirectWebRTCManager.AvatarStatus.PROCESSING -> {
+                        speakingIndicator?.visibility = View.VISIBLE
+                    }
+                    DirectWebRTCManager.AvatarStatus.IDLE -> {
+                        speakingIndicator?.visibility = View.GONE
+                    }
+                }
+
+                // Update status indicator based on connection state
+                when (connState) {
                     DirectWebRTCManager.ConnectionState.CONNECTING -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_connecting)
                         statusIndicator?.visibility = View.VISIBLE
                         centerStatusIcon()
+                        switchToPlaceholder()
                     }
                     DirectWebRTCManager.ConnectionState.CONNECTED -> {
+                        // Hide status indicator on successful connection
                         statusIndicator?.visibility = View.GONE
-                        startVideoFlowCheck()
+
+                        // Display mode logic (mirrors Vue exactly):
+                        // 1. Idle + has idle video → standby
+                        // 2. Speaking → WebRTC (force switch)
+                        // 3. Idle + no idle video → WebRTC (let it show whatever the server sends)
+                        // 4. Processing → keep current mode
+                        when (avatarStatus) {
+                            DirectWebRTCManager.AvatarStatus.SPEAKING -> {
+                                lastWebRTCFrameTime = System.currentTimeMillis()
+                                switchToWebRTC()
+                            }
+                            DirectWebRTCManager.AvatarStatus.PROCESSING -> {
+                                // Keep current mode during processing
+                                if (!hasVideoFlow && idleVideoUrls.isNotEmpty()) {
+                                    switchToStandby()
+                                }
+                            }
+                            DirectWebRTCManager.AvatarStatus.IDLE -> {
+                                if (idleVideoUrls.isNotEmpty()) {
+                                    switchToStandby()
+                                } else {
+                                    // No idle videos - show WebRTC layer so server video is visible
+                                    switchToWebRTC()
+                                }
+                            }
+                        }
                     }
                     DirectWebRTCManager.ConnectionState.ERROR -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_error)
                         statusIndicator?.visibility = View.VISIBLE
                         moveStatusToCorner()
                         videoFlowCheckJob?.cancel()
-                        // Fall back to standby or placeholder
                         if (idleVideoUrls.isNotEmpty()) {
                             switchToStandby()
                         } else {
@@ -620,28 +657,11 @@ object FloatingAvatarManager {
             }
         }
 
-        // Observe avatar status for display mode switching
-        observeAvatarStatusJob = CoroutineScope(Dispatchers.Main).launch {
-            DirectWebRTCManager.avatarStatus.collect { status ->
-                when (status) {
-                    DirectWebRTCManager.AvatarStatus.SPEAKING -> {
-                        speakingIndicator?.visibility = View.VISIBLE
-                        // If we have WebRTC video, switch to it
-                        if (DirectWebRTCManager.connectionState.value == DirectWebRTCManager.ConnectionState.CONNECTED) {
-                            lastWebRTCFrameTime = System.currentTimeMillis()
-                            switchToWebRTC()
-                        }
-                    }
-                    DirectWebRTCManager.AvatarStatus.PROCESSING -> {
-                        speakingIndicator?.visibility = View.VISIBLE
-                    }
-                    DirectWebRTCManager.AvatarStatus.IDLE -> {
-                        speakingIndicator?.visibility = View.GONE
-                        // When avatar goes idle, switch to standby if we have idle videos
-                        if (idleVideoUrls.isNotEmpty()) {
-                            switchToStandby()
-                        }
-                    }
+        // Separate job: start video flow check when connection becomes CONNECTED
+        observeConnectionJob = CoroutineScope(Dispatchers.Main).launch {
+            DirectWebRTCManager.connectionState.collect { state ->
+                if (state == DirectWebRTCManager.ConnectionState.CONNECTED) {
+                    startVideoFlowCheck()
                 }
             }
         }
