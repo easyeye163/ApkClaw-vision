@@ -54,6 +54,11 @@ object DirectWebRTCManager {
     private val _avatarStatus = MutableStateFlow(AvatarStatus.IDLE)
     val avatarStatus: StateFlow<AvatarStatus> = _avatarStatus
 
+    // Idle video URLs from server (for standby animation)
+    private val _idleVideoUrls = MutableStateFlow<List<String>>(emptyList())
+    val idleVideoUrls: StateFlow<List<String>> = _idleVideoUrls
+    val hasIdleVideo: Boolean get() = _idleVideoUrls.value.isNotEmpty()
+
     private var videoRenderer: SurfaceViewRenderer? = null
     private var remoteVideoTrack: VideoTrack? = null
     private var peerConnectionFactory: PeerConnectionFactory? = null
@@ -201,6 +206,24 @@ object DirectWebRTCManager {
             val json = JsonParser.parseString(respStr).asJsonObject
             val sid = json.get("session_id")?.asString
             Log.d(TAG, "Session response: streaming_mode=${json.get("streaming_mode")?.asString}")
+
+            // Parse idle video URLs from session response
+            val idleUrls = mutableListOf<String>()
+ val idleVideoUrl = json.get("idle_video_url")?.asString
+            val idleVideoUrlsArray = json.getAsJsonArray("idle_video_urls")
+            if (idleVideoUrlsArray != null && idleVideoUrlsArray.size() > 0) {
+                idleUrls.addAll(idleVideoUrlsArray.map { it.asString })
+            } else if (!idleVideoUrl.isNullOrEmpty()) {
+                idleUrls.add(idleVideoUrl)
+            }
+            if (idleUrls.isNotEmpty()) {
+                _idleVideoUrls.value = idleUrls
+                addDiagnostic("Session returned ${idleUrls.size} idle video URL(s)")
+                Log.d(TAG, "Idle video URLs from session: ${idleUrls.size} urls, first=${idleUrls.firstOrNull()?.take(80)}")
+            } else {
+                Log.d(TAG, "No idle video URLs in session response")
+            }
+
             return sid
         } catch (e: Exception) {
             Log.e(TAG, "Error creating session", e)
@@ -284,6 +307,7 @@ object DirectWebRTCManager {
             "webrtc_offer" -> handleWebrtcOffer(json)
             "ice_candidate" -> handleIceCandidate(json)
             "avatar_status" -> handleAvatarStatus(json)
+            "idle_video_ready" -> handleIdleVideoReady(json)
             "transcript" -> handleTranscript(json)
             "llm_token" -> handleLlmToken(json)
             else -> Log.d(TAG, "Unhandled message type: $type")
@@ -735,6 +759,24 @@ object DirectWebRTCManager {
                 "processing" -> AvatarStatus.PROCESSING
                 else -> AvatarStatus.IDLE
             }
+        }
+    }
+
+    /**
+     * Handle idle_video_ready - server sends idle video URLs dynamically.
+     */
+    private fun handleIdleVideoReady(json: JsonObject) {
+        val urlsArray = json.getAsJsonArray("urls")
+        val singleUrl = json.get("url")?.asString
+        if (urlsArray != null && urlsArray.size() > 0) {
+            val urls = urlsArray.map { it.asString }
+            _idleVideoUrls.value = urls
+            addDiagnostic("idle_video_ready: ${urls.size} URLs received")
+            Log.d(TAG, "Idle video ready: ${urls.size} URLs")
+        } else if (!singleUrl.isNullOrEmpty()) {
+            _idleVideoUrls.value = listOf(singleUrl)
+            addDiagnostic("idle_video_ready: 1 URL received")
+            Log.d(TAG, "Idle video ready: $singleUrl")
         }
     }
 

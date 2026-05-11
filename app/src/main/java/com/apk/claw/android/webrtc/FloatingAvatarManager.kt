@@ -23,12 +23,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+
 import kotlinx.coroutines.launch
 
 /**
  * Floating avatar window manager (singleton).
- * Shows a draggable/resizable overlay with the WebRTC video renderer for digital avatar.
- * Falls back to a local test MP4 when WebRTC video is not available.
+ *
+ * Two-layer video system (same as Vue frontend):
+ * - **Standby layer**: Loops server-provided idle videos (TextureView + MediaPlayer)
+ * - **WebRTC layer**: Live avatar video (SurfaceViewRenderer)
+ *
+ * Display mode switching logic (mirrors Vue SessionPage.vue):
+ * - Idle + has idle video → show standby (avatar keeps moving)
+ * - Speaking + fresh WebRTC frames → show WebRTC
+ * - Speaking but no fresh frames yet → show standby (fallback)
+ * - No idle video + no WebRTC → show placeholder icon
  */
 object FloatingAvatarManager {
 
@@ -40,11 +49,14 @@ object FloatingAvatarManager {
     private val MIN_SIZE_DP = 60
     private val MAX_SIZE_DP = 300
 
+    // Display modes (mirrors Vue: webrtc | standby | placeholder)
+    private enum class DisplayMode { STANDBY, WEBRTC, PLACEHOLDER }
+
     private var windowManager: WindowManager? = null
     private var avatarView: View? = null
     private var renderer: SurfaceViewRenderer? = null
-    private var fallbackTextureView: TextureView? = null
-    private var fallbackMediaPlayer: MediaPlayer? = null
+    private var standbyTextureView: TextureView? = null
+    private var standbyMediaPlayer: MediaPlayer? = null
     private var statusIndicator: ImageView? = null
     private var speakingIndicator: View? = null
     private var resizeHandle: View? = null
@@ -59,12 +71,26 @@ object FloatingAvatarManager {
 
     private var currentSizeDp = DEFAULT_SIZE_DP
 
+    // Standby idle video state
+    private var idleVideoUrls: List<String> = emptyList()
+    private var currentIdleVideoIndex = 0
+    private var standbySurfaceReady = false
+    private var standbyPrepared = false
+
+    // WebRTC video flow tracking
+    private var hasVideoFlow = false
+    private var lastWebRTCFrameTime = 0L  // System.currentTimeMillis of last confirmed frame
+    private val FRESH_FRAME_TIMEOUT_MS = 3000L
+
+    private var appContext: Context? = null
+
+    // Coroutine jobs
     private var observeConnectionJob: Job? = null
     private var observeAvatarStatusJob: Job? = null
+    private var observeIdleUrlsJob: Job? = null
     private var videoFlowCheckJob: Job? = null
-
-    private var hasVideoFlow = false  // Track if WebRTC video is actually rendering frames
-    private var appContext: Context? = null
+    private var displayModeJob: Job? = null
+    private var idleCycleJob: Job? = null
 
     /**
      * Show the floating avatar window.
@@ -99,15 +125,15 @@ object FloatingAvatarManager {
             setZOrderMediaOverlay(true)
         }
 
-        // Create fallback TextureView for MP4 playback
-        fallbackTextureView = TextureView(ctx)
+        // Create standby TextureView for idle video playback
+        standbyTextureView = TextureView(ctx)
 
         // Inflate the avatar overlay layout
         val inflater = LayoutInflater.from(ctx)
         avatarView = inflater.inflate(R.layout.layout_floating_avatar, null).also { view ->
             val container = view.findViewById<FrameLayout>(R.id.avatarVideoContainer)
-            // Add fallback first (behind), then renderer on top
-            fallbackTextureView?.let { container?.addView(it, 0) }
+            // Add standby first (behind), then renderer on top
+            standbyTextureView?.let { container?.addView(it, 0) }
             container?.addView(renderer)
             statusIndicator = view.findViewById(R.id.ivAvatarStatus)
             speakingIndicator = view.findViewById(R.id.speakingIndicator)
@@ -142,16 +168,22 @@ object FloatingAvatarManager {
             return
         }
 
-        // Set up fallback video playback
-        setupFallbackVideo(ctx)
+        // Set up standby video player (surface listener)
+        setupStandbyVideo(ctx)
 
-        // Initially: show fallback, hide WebRTC renderer
-        showFallbackVideo()
+        // Check if server already provided idle video URLs
+        val existingUrls = DirectWebRTCManager.idleVideoUrls.value
+        if (existingUrls.isNotEmpty()) {
+            onIdleVideoUrlsUpdated(existingUrls)
+        }
+
+        // Initially show placeholder (status indicator) - standby will take over once URLs arrive
+        applyDisplayMode(DisplayMode.PLACEHOLDER)
 
         // Bind the renderer to DirectWebRTCManager
         renderer?.let { DirectWebRTCManager.bindRenderer(it) }
 
-        // Observe connection state and avatar status
+        // Observe all state flows
         observeState()
 
         // Trigger WebRTC connection if not already connected or in error state
@@ -184,7 +216,6 @@ object FloatingAvatarManager {
                 if (!isDragging && !isResizing) {
                     if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
                         isDragging = true
-                        // Show resize handle when user starts interacting
                         resizeHandle?.visibility = View.VISIBLE
                         resizeHandle?.alpha = 0.6f
                     }
@@ -202,11 +233,9 @@ object FloatingAvatarManager {
             }
             MotionEvent.ACTION_UP -> {
                 if (isDragging) {
-                    // Save position
                     KVUtils.putInt(PREF_X, params.x)
                     KVUtils.putInt(PREF_Y, params.y)
                 }
-                // Hide resize handle after 2 seconds of inactivity
                 if (!isResizing) {
                     resizeHandle?.postDelayed({
                         if (!isDragging && !isResizing) {
@@ -238,19 +267,16 @@ object FloatingAvatarManager {
                 initialTouchX = event.rawX
                 initialTouchY = event.rawY
                 initialSize = (params.width / density).toInt()
-                // Keep resize handle visible
                 resizeHandle?.visibility = View.VISIBLE
                 resizeHandle?.alpha = 0.8f
                 true
             }
             MotionEvent.ACTION_MOVE -> {
-                // Use the larger of dx/dy to keep it square (proportional)
                 val dx = event.rawX - initialTouchX
                 val dy = event.rawY - initialTouchY
                 val deltaDp = (Math.max(dx, dy) / density).toInt()
 
                 var newSizeDp = initialSize + deltaDp
-                // Clamp to min/max bounds
                 newSizeDp = newSizeDp.coerceIn(MIN_SIZE_DP, MAX_SIZE_DP)
 
                 val newSizePx = (newSizeDp * density).toInt()
@@ -268,13 +294,10 @@ object FloatingAvatarManager {
             }
             MotionEvent.ACTION_UP -> {
                 isResizing = false
-                // Save size
                 KVUtils.putInt(PREF_SIZE, currentSizeDp)
-                // Also save position since resize might shift it
                 KVUtils.putInt(PREF_X, params.x)
                 KVUtils.putInt(PREF_Y, params.y)
                 Log.d(TAG, "Avatar resized to ${currentSizeDp}dp, saved")
-                // Fade out resize handle after 2 seconds
                 resizeHandle?.postDelayed({
                     if (!isDragging && !isResizing) {
                         resizeHandle?.animate()?.alpha(0f)?.withEndAction {
@@ -289,46 +312,23 @@ object FloatingAvatarManager {
     }
 
     /**
-     * Set up the fallback MP4 video player.
+     * Set up the standby idle video player using TextureView.
      */
-    private fun setupFallbackVideo(ctx: Context) {
-        fallbackTextureView?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+    private fun setupStandbyVideo(ctx: Context) {
+        standbyTextureView?.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(surfaceTexture: SurfaceTexture, width: Int, height: Int) {
-                try {
-                    val surface = Surface(surfaceTexture)
-                    if (fallbackMediaPlayer == null) {
-                        fallbackMediaPlayer = MediaPlayer().apply {
-                            val resId = ctx.resources.getIdentifier(
-                                "test_avatar", "raw", ctx.packageName
-                            )
-                            if (resId != 0) {
-                                setDataSource(ctx,
-                                    android.net.Uri.parse("android.resource://${ctx.packageName}/$resId"))
-                            }
-                            setSurface(surface)
-                            isLooping = true
-                            setVolume(0f, 0f)  // Mute
-                            prepareAsync()
-                            setOnPreparedListener { mp ->
-                                mp.start()
-                                Log.d(TAG, "Fallback video started playing")
-                            }
-                            setOnErrorListener { _, what, extra ->
-                                Log.e(TAG, "Fallback video error: what=$what extra=$extra")
-                                false
-                            }
-                        }
-                    } else {
-                        fallbackMediaPlayer?.setSurface(surface)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error setting up fallback video", e)
+                standbySurfaceReady = true
+                Log.d(TAG, "Standby TextureView surface ready")
+                // If we already have URLs, start playing immediately
+                if (idleVideoUrls.isNotEmpty()) {
+                    playIdleVideo(ctx)
                 }
             }
 
             override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {}
             override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-                stopFallbackVideo()
+                standbySurfaceReady = false
+                stopStandbyVideo()
                 return true
             }
             override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
@@ -336,47 +336,151 @@ object FloatingAvatarManager {
     }
 
     /**
-     * Show the fallback test video and hide the WebRTC renderer.
+     * Called when idle video URLs are received from server (session response or WS message).
      */
-    private fun showFallbackVideo() {
-        hasVideoFlow = false
-        if (renderer != null) {
-            renderer?.visibility = View.GONE
+    private fun onIdleVideoUrlsUpdated(urls: List<String>) {
+        val newUrls = urls.filter { it.isNotBlank() }
+        if (newUrls.isEmpty()) return
+
+        val hadUrls = idleVideoUrls.isNotEmpty()
+        idleVideoUrls = newUrls
+        currentIdleVideoIndex = 0
+        Log.d(TAG, "Idle video URLs updated: ${newUrls.size} urls")
+
+        val ctx = appContext ?: return
+        if (standbySurfaceReady) {
+            playIdleVideo(ctx)
         }
-        if (fallbackTextureView != null) {
-            fallbackTextureView?.visibility = View.VISIBLE
+
+        // If this is the first time we get URLs, the display mode should update
+        if (!hadUrls) {
+            // Trigger display mode re-evaluation will happen via observeState
         }
     }
 
     /**
-     * Show the WebRTC renderer and hide the fallback video.
-     * Called when WebRTC video frames are confirmed flowing.
+     * Play current idle video (from idleVideoUrls[currentIdleVideoIndex]).
      */
-    fun showWebRTCVideo() {
+    private fun playIdleVideo(ctx: Context) {
+        if (idleVideoUrls.isEmpty() || !standbySurfaceReady) return
+
+        stopStandbyVideo()
+
+        try {
+            val url = idleVideoUrls[currentIdleVideoIndex]
+            val surfaceTexture = standbyTextureView?.surfaceTexture ?: return
+            val surface = Surface(surfaceTexture)
+
+            standbyMediaPlayer = MediaPlayer().apply {
+                setDataSource(url)
+                setSurface(surface)
+                isLooping = (idleVideoUrls.size == 1)  // Native loop if only 1 video
+                setVolume(0f, 0f)  // Mute
+                prepareAsync()
+                setOnPreparedListener { mp ->
+                    standbyPrepared = true
+                    mp.start()
+                    Log.d(TAG, "Standby video playing: index=$currentIdleVideoIndex, url=${url.take(60)}")
+                }
+                setOnCompletionListener {
+                    // If multiple videos, cycle to next one
+                    if (idleVideoUrls.size > 1) {
+                        currentIdleVideoIndex = (currentIdleVideoIndex + 1) % idleVideoUrls.size
+                        Log.d(TAG, "Standby video completed, cycling to index $currentIdleVideoIndex")
+                        playIdleVideo(ctx)
+                    }
+                }
+                setOnErrorListener { _, what, extra ->
+                    Log.e(TAG, "Standby video error: what=$what extra=$extra, url=${url.take(60)}")
+                    // Try next video if available
+                    if (idleVideoUrls.size > 1) {
+                        currentIdleVideoIndex = (currentIdleVideoIndex + 1) % idleVideoUrls.size
+                        playIdleVideo(ctx)
+                    }
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing idle video", e)
+        }
+    }
+
+    /**
+     * Stop standby video playback.
+     */
+    private fun stopStandbyVideo() {
+        standbyPrepared = false
+        try {
+            standbyMediaPlayer?.stop()
+        } catch (_: Exception) {}
+        try {
+            standbyMediaPlayer?.release()
+        } catch (_: Exception) {}
+        standbyMediaPlayer = null
+    }
+
+    /**
+     * Switch to WebRTC video display mode.
+     */
+    private fun switchToWebRTC() {
         if (!hasVideoFlow) {
             hasVideoFlow = true
-            Log.d(TAG, "Switching to WebRTC video (frames confirmed)")
-            stopFallbackVideo()
-            if (renderer != null) {
-                renderer?.visibility = View.VISIBLE
-            }
-            if (fallbackTextureView != null) {
-                fallbackTextureView?.visibility = View.GONE
-            }
+            lastWebRTCFrameTime = System.currentTimeMillis()
+            Log.d(TAG, "Switching to WebRTC display mode")
+        }
+        renderer?.visibility = View.VISIBLE
+        standbyTextureView?.visibility = View.GONE
+        // Stop standby to save bandwidth when WebRTC is active
+        if (standbyPrepared) {
+            stopStandbyVideo()
         }
     }
 
     /**
-     * Stop fallback video playback.
+     * Switch to standby idle video display mode.
      */
-    private fun stopFallbackVideo() {
-        try {
-            fallbackMediaPlayer?.stop()
-        } catch (_: Exception) {}
-        try {
-            fallbackMediaPlayer?.release()
-        } catch (_: Exception) {}
-        fallbackMediaPlayer = null
+    private fun switchToStandby() {
+        hasVideoFlow = false
+        renderer?.visibility = View.GONE
+        standbyTextureView?.visibility = View.VISIBLE
+
+        // Restart standby if it was stopped and we have URLs
+        if (standbyMediaPlayer == null && idleVideoUrls.isNotEmpty() && standbySurfaceReady) {
+            val ctx = appContext ?: return
+            playIdleVideo(ctx)
+        }
+        Log.d(TAG, "Switching to standby display mode")
+    }
+
+    /**
+     * Switch to placeholder (status icon, no video).
+     */
+    private fun switchToPlaceholder() {
+        hasVideoFlow = false
+        renderer?.visibility = View.GONE
+        standbyTextureView?.visibility = View.GONE
+        stopStandbyVideo()
+        Log.d(TAG, "Switching to placeholder display mode")
+    }
+
+    /**
+     * Apply a display mode change.
+     */
+    private fun applyDisplayMode(mode: DisplayMode) {
+        when (mode) {
+            DisplayMode.WEBRTC -> switchToWebRTC()
+            DisplayMode.STANDBY -> switchToStandby()
+            DisplayMode.PLACEHOLDER -> switchToPlaceholder()
+        }
+    }
+
+    /**
+     * Show WebRTC video (called when video frames confirmed flowing).
+     * Public API for DirectWebRTCManager integration.
+     */
+    fun showWebRTCVideo() {
+        lastWebRTCFrameTime = System.currentTimeMillis()
+        switchToWebRTC()
     }
 
     /**
@@ -388,10 +492,16 @@ object FloatingAvatarManager {
         observeConnectionJob = null
         observeAvatarStatusJob?.cancel()
         observeAvatarStatusJob = null
+        observeIdleUrlsJob?.cancel()
+        observeIdleUrlsJob = null
         videoFlowCheckJob?.cancel()
         videoFlowCheckJob = null
+        displayModeJob?.cancel()
+        displayModeJob = null
+        idleCycleJob?.cancel()
+        idleCycleJob = null
 
-        stopFallbackVideo()
+        stopStandbyVideo()
         hasVideoFlow = false
 
         DirectWebRTCManager.unbindRenderer()
@@ -405,12 +515,14 @@ object FloatingAvatarManager {
         }
         avatarView = null
         renderer = null
-        fallbackTextureView = null
+        standbyTextureView = null
         statusIndicator = null
         speakingIndicator = null
         resizeHandle = null
         isDragging = false
         isResizing = false
+        idleVideoUrls = emptyList()
+        currentIdleVideoIndex = 0
         Log.d(TAG, "Floating avatar hidden")
     }
 
@@ -453,49 +565,71 @@ object FloatingAvatarManager {
         }
     }
 
+    /**
+     * Observe all state flows and manage display mode switching.
+     * Mirrors the Vue SessionPage.vue displayMode computed property.
+     */
     private fun observeState() {
+        // Observe idle video URLs (from session creation or idle_video_ready WS message)
+        observeIdleUrlsJob = CoroutineScope(Dispatchers.Main).launch {
+            DirectWebRTCManager.idleVideoUrls
+                .collect { urls ->
+                    if (urls.isNotEmpty()) {
+                        onIdleVideoUrlsUpdated(urls)
+                    }
+                }
+        }
+
+        // Observe connection state for status indicator
         observeConnectionJob = CoroutineScope(Dispatchers.Main).launch {
             DirectWebRTCManager.connectionState.collect { state ->
                 when (state) {
                     DirectWebRTCManager.ConnectionState.CONNECTING -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_connecting)
                         statusIndicator?.visibility = View.VISIBLE
-                        // Center the icon during connecting
                         centerStatusIcon()
                     }
                     DirectWebRTCManager.ConnectionState.CONNECTED -> {
                         statusIndicator?.visibility = View.GONE
-                        // After connecting, wait a few seconds for video frames to arrive
-                        // If no frames, keep showing fallback
                         startVideoFlowCheck()
                     }
                     DirectWebRTCManager.ConnectionState.ERROR -> {
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_error)
                         statusIndicator?.visibility = View.VISIBLE
-                        // Move to corner so it doesn't block the fallback video
                         moveStatusToCorner()
                         videoFlowCheckJob?.cancel()
-                        showFallbackVideo()
+                        // Fall back to standby or placeholder
+                        if (idleVideoUrls.isNotEmpty()) {
+                            switchToStandby()
+                        } else {
+                            switchToPlaceholder()
+                        }
                     }
                     DirectWebRTCManager.ConnectionState.DISCONNECTED -> {
                         statusIndicator?.visibility = View.VISIBLE
                         statusIndicator?.setImageResource(R.drawable.ic_avatar_disconnected)
                         centerStatusIcon()
                         videoFlowCheckJob?.cancel()
-                        showFallbackVideo()
+                        if (idleVideoUrls.isNotEmpty()) {
+                            switchToStandby()
+                        } else {
+                            switchToPlaceholder()
+                        }
                     }
                 }
             }
         }
 
+        // Observe avatar status for display mode switching
         observeAvatarStatusJob = CoroutineScope(Dispatchers.Main).launch {
             DirectWebRTCManager.avatarStatus.collect { status ->
                 when (status) {
                     DirectWebRTCManager.AvatarStatus.SPEAKING -> {
                         speakingIndicator?.visibility = View.VISIBLE
-                        // Speaking means video is definitely flowing
+                        // If we have WebRTC video, switch to it
                         if (DirectWebRTCManager.connectionState.value == DirectWebRTCManager.ConnectionState.CONNECTED) {
-                            showWebRTCVideo()
+                            lastWebRTCFrameTime = System.currentTimeMillis()
+                            switchToWebRTC()
                         }
                     }
                     DirectWebRTCManager.AvatarStatus.PROCESSING -> {
@@ -503,6 +637,10 @@ object FloatingAvatarManager {
                     }
                     DirectWebRTCManager.AvatarStatus.IDLE -> {
                         speakingIndicator?.visibility = View.GONE
+                        // When avatar goes idle, switch to standby if we have idle videos
+                        if (idleVideoUrls.isNotEmpty()) {
+                            switchToStandby()
+                        }
                     }
                 }
             }
@@ -526,15 +664,16 @@ object FloatingAvatarManager {
                     break
                 }
                 if (DirectWebRTCManager.hasRemoteVideoTrack()) {
-                    Log.d(TAG, "Remote video track found after ${checks * 3}s, switching to WebRTC renderer")
-                    showWebRTCVideo()
-                    statusIndicator?.visibility = View.GONE
+                    Log.d(TAG, "Remote video track found after ${checks * 3}s")
+                    lastWebRTCFrameTime = System.currentTimeMillis()
+                    // Don't auto-switch to WebRTC here - let avatar_status:SPEAKING trigger it
+                    // Just note that we have a track available
                     break
                 }
                 Log.d(TAG, "No remote video track yet, check $checks/$maxChecks")
             }
             if (!hasVideoFlow && checks >= maxChecks) {
-                Log.w(TAG, "No video track after ${maxChecks * 3}s total, keeping fallback")
+                Log.w(TAG, "No video track after ${maxChecks * 3}s total, keeping current mode")
             }
         }
     }
