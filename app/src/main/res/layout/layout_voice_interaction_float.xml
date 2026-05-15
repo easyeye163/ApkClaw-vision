@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/card_voice_root"
+    android:layout_width="220dp"
+    android:layout_height="wrap_content"
+    android:minHeight="80dp"
+    app:cardBackgroundColor="#CC111111"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="6dp"
+    app:cardUseCompatPadding="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="12dp">
+
+        <!-- 左侧：状态文本 + 消息区域 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tv_voice_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="按住说话"
+                android:textColor="#FFFFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_voice_message"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="8"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp"
+                android:visibility="invisible" />
+
+            <!-- 对话结果展示区域 -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_voice_results"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:maxHeight="200dp"
+                android:nestedScrollingEnabled="true"
+                android:scrollbars="vertical"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- 右侧：语音按钮 + 关闭按钮 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+
+            <ImageButton
+                android:id="@+id/btn_voice_mic"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginBottom="4dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="按住语音"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@android:drawable/ic_btn_speak_now" />
+
+            <ImageButton
+                android:id="@+id/btn_voice_close"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@android:color/transparent"
+                android:contentDescription="关闭"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@android:drawable/ic_menu_close_clear_cancel" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

@@ -19,6 +19,7 @@ import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
 import com.apk.claw.android.channel.Channel
 import com.apk.claw.android.floating.reasoning.FloatingReasoningPanel
+import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
 import com.apk.claw.android.service.ClawAccessibilityService
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
@@ -241,6 +242,21 @@ object FloatingCircleManager {
                 FloatingAvatarManager.toggle()
             } catch (e: Exception) {
                 XLog.e(TAG, "Error toggling avatar", e)
+            }
+        }
+
+        // "语音悬浮框" option
+        popupView.findViewById<TextView>(R.id.tvMenuVoiceFloat)?.setOnClickListener {
+            dismissPopupMenu()
+            try {
+                val app = appRef ?: ClawApplication.instance
+                if (VoiceInteractionFloatWindow.isShowing()) {
+                    VoiceInteractionFloatWindow.dismiss()
+                } else {
+                    VoiceInteractionFloatWindow.show(app)
+                }
+            } catch (e: Exception) {
+                XLog.e(TAG, "Error toggling voice float", e)
             }
         }
 

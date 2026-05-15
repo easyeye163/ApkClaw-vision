@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.graphics.Bitmap
@@ -32,6 +29,7 @@ import com.apk.claw.android.floating.FloatingCircleManager
 import com.apk.claw.android.integration.FeatureIntegrationManager
 import com.apk.claw.android.ui.skill.SkillManageActivity
 import com.apk.claw.android.utils.KVUtils
+import com.apk.claw.android.voice.VoiceInputController
 import com.apk.claw.android.widget.CommonToolbar
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -115,7 +113,7 @@ class ChatActivity : BaseActivity() {
     private lateinit var btnVoice: ImageView
     private lateinit var switchCloudMode: Switch
     private lateinit var tvConnectionStatus: android.widget.TextView
-    private var speechRecognizer: SpeechRecognizer? = null
+    private var voiceInputController: VoiceInputController? = null
     private var isListening = false
     private lateinit var adapter: ChatAdapter
 
@@ -229,6 +227,7 @@ class ChatActivity : BaseActivity() {
         handleSkillIntent()
         handleScreenshotIntent()
         handlePushIntent()
+        handleVoiceFloatIntent()
     }
 
     // 通知权限请求 launcher (Android 13+)
@@ -266,6 +265,8 @@ class ChatActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopListening()
+        voiceInputController?.destroy()
+        voiceInputController = null
         CloudChatManager.disconnect()
     }
 
@@ -456,86 +457,48 @@ class ChatActivity : BaseActivity() {
         }
     }
 
-    @Suppress("DEPRECATION")
-    private fun startListening() {
-        if (isListening) return
-
-        try {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "zh-CN")
-                putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, "zh-CN,en-US")
-                putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+    private fun initVoiceController() {
+        voiceInputController?.destroy()
+        val controller = VoiceInputController(this)
+        controller.listener = object : VoiceInputController.Listener {
+            override fun onListeningStarted() {
+                isListening = true
+                btnVoice.setImageResource(R.drawable.ic_mic_active)
+                Toast.makeText(this@ChatActivity, getString(R.string.voice_listening), Toast.LENGTH_SHORT).show()
             }
 
-            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    isListening = true
-                    btnVoice.setImageResource(R.drawable.ic_mic_active)
-                    Toast.makeText(this@ChatActivity, getString(R.string.voice_listening), Toast.LENGTH_SHORT).show()
-                }
+            override fun onPartialResults(text: String) {
+                etMessage.setText(text)
+                etMessage.setSelection(text.length)
+            }
 
-                override fun onBeginningOfSpeech() {}
+            override fun onFinalResult(text: String) {
+                isListening = false
+                btnVoice.setImageResource(R.drawable.ic_mic)
+                etMessage.setText(text)
+                etMessage.setSelection(text.length)
+                sendMessage()
+            }
 
-                override fun onRmsChanged(rmsdB: Float) {}
-
-                override fun onBufferReceived(buffer: ByteArray?) {}
-
-                override fun onEndOfSpeech() {}
-
-                override fun onError(error: Int) {
-                    isListening = false
-                    btnVoice.setImageResource(R.drawable.ic_mic)
-                    val msg = when (error) {
-                        SpeechRecognizer.ERROR_NO_MATCH -> getString(R.string.voice_no_match)
-                        else -> getString(R.string.voice_error)
-                    }
-                    Toast.makeText(this@ChatActivity, msg, Toast.LENGTH_SHORT).show()
-                    speechRecognizer?.destroy()
-                    speechRecognizer = null
-                }
-
-                override fun onResults(results: Bundle?) {
-                    isListening = false
-                    btnVoice.setImageResource(R.drawable.ic_mic)
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        val text = matches[0]
-                        etMessage.setText(text)
-                        etMessage.setSelection(text.length)
-                        // Auto-send after recognition
-                        sendMessage()
-                    }
-                    speechRecognizer?.destroy()
-                    speechRecognizer = null
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {
-                    val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        etMessage.setText(matches[0])
-                    }
-                }
-
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-
-            speechRecognizer?.startListening(intent)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, getString(R.string.voice_error), Toast.LENGTH_SHORT).show()
+            override fun onError(errorCode: Int, message: String) {
+                isListening = false
+                btnVoice.setImageResource(R.drawable.ic_mic)
+                Toast.makeText(this@ChatActivity, message, Toast.LENGTH_SHORT).show()
+            }
         }
+        voiceInputController = controller
+    }
+
+    private fun startListening() {
+        if (isListening) return
+        if (voiceInputController == null) initVoiceController()
+        voiceInputController?.startListening()
     }
 
     private fun stopListening() {
         isListening = false
         btnVoice.setImageResource(R.drawable.ic_mic)
-        speechRecognizer?.stopListening()
-        speechRecognizer?.destroy()
-        speechRecognizer = null
+        voiceInputController?.stopListening()
     }
 
     private fun loadChatHistory() {
@@ -594,21 +557,43 @@ class ChatActivity : BaseActivity() {
     }
 
     /**
-     * Handle screenshot intent from ScreenshotPermissionActivity.
+     * Handle screenshot intent from ScreenshotPermissionActivity or VoiceInteractionFloatWindow.
      * Screenshot is already taken and saved; we just show it and auto-send for description.
+     * When voice_text is provided, use it as the user prompt instead of the default describe_screenshot.
      */
     private fun handleScreenshotIntent() {
         val screenshotPath = intent.getStringExtra(ScreenshotPermissionActivity.EXTRA_SCREENSHOT_PATH)
+        val voiceText = intent.getStringExtra("voice_text")
         if (screenshotPath != null) {
-            handleScreenshotPath(screenshotPath)
+            handleScreenshotPath(screenshotPath, voiceText)
             intent.removeExtra(ScreenshotPermissionActivity.EXTRA_SCREENSHOT_PATH)
+            intent.removeExtra("voice_text")
+        }
+    }
+
+    /**
+     * Handle voice float intent: voice_text without screenshot (direct text send)
+     */
+    private var voiceFloatTextHandled = false
+
+    private fun handleVoiceFloatIntent() {
+        val screenshotPath = intent.getStringExtra(ScreenshotPermissionActivity.EXTRA_SCREENSHOT_PATH)
+        val voiceText = intent.getStringExtra("voice_text")
+        if (voiceText != null && voiceText.isNotEmpty() && screenshotPath == null && !voiceFloatTextHandled) {
+            voiceFloatTextHandled = true
+            // No screenshot, just send the voice text directly
+            etMessage.setText(voiceText)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                sendMessage()
+            }, 300)
+            intent.removeExtra("voice_text")
         }
     }
 
     /**
      * Handle a screenshot file path: show preview and auto-send description request
      */
-    private fun handleScreenshotPath(screenshotPath: String) {
+    private fun handleScreenshotPath(screenshotPath: String, customPrompt: String? = null) {
         try {
             val file = File(screenshotPath)
             if (!file.exists()) {
@@ -631,9 +616,12 @@ class ChatActivity : BaseActivity() {
                 return
             }
 
+            // Use custom voice prompt or default screenshot description
+            val prompt = customPrompt?.takeIf { it.isNotBlank() } ?: getString(R.string.describe_screenshot)
+
             // Add image preview message
             adapter.addMessage(ChatMessage(
-                text = getString(R.string.screenshot_saved),
+                text = if (customPrompt != null) "$customPrompt" else getString(R.string.screenshot_saved),
                 isUser = true,
                 imageData = imageData,
                 timestamp = System.currentTimeMillis()
@@ -642,7 +630,7 @@ class ChatActivity : BaseActivity() {
 
             // Auto-send description request with image
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                sendMessageInternal(getString(R.string.describe_screenshot), imageData)
+                sendMessageInternal(prompt, imageData)
             }, 500)
 
         } catch (e: Exception) {

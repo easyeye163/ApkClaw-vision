@@ -48,4 +48,18 @@
         android:drawablePadding="10dp"
         android:background="@drawable/bg_popup_menu_item" />
 
+    <TextView
+        android:id="@+id/tvMenuVoiceFloat"
+        android:layout_width="136dp"
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:text="语音悬浮框"
+        android:textColor="#E0FFFFFF"
+        android:textSize="14sp"
+        android:drawableStart="@drawable/ic_mic"
+        android:drawablePadding="10dp"
+        android:background="@drawable/bg_popup_menu_item" />
+
 </LinearLayout>
