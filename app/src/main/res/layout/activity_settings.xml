@@ -35,6 +35,12 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 
+            <!-- 关于分组 -->
+            <com.apk.claw.android.widget.MenuGroup
+                android:id="@+id/aboutGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="24pt"/>

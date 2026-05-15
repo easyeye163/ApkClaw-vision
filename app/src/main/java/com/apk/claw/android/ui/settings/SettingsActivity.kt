@@ -15,8 +15,12 @@ import com.apk.claw.android.widget.MenuGroup
 import com.apk.claw.android.widget.MenuItem
 import kotlinx.coroutines.launch
 import android.content.Intent
+import android.net.Uri
 import com.apk.claw.android.appViewModel
 import com.apk.claw.android.server.ConfigServerManager
+import com.apk.claw.android.updater.AppUpdater
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * 设置页面
@@ -144,6 +148,20 @@ class SettingsActivity : BaseActivity() {
             showDivider = false
         )
         menuItems[SettingsViewModel.MenuAction.WEBRTC_CONFIG.name]?.setLeadingIconColor(getColor(R.color.colorTextPrimary))
+
+        // About group - Check for Updates
+        val aboutGroup = findViewById<com.apk.claw.android.widget.MenuGroup>(R.id.aboutGroup)
+        aboutGroup.setTitle(getString(R.string.settings_group_about))
+
+        val updater = AppUpdater(this)
+        val currentVer = "v${updater.getCurrentVersionName()}"
+        menuItems[SettingsViewModel.MenuAction.CHECK_UPDATE.name] = aboutGroup.addMenuItem(
+            leadingIcon = android.R.drawable.ic_popup_sync,
+            title = getString(R.string.menu_check_update),
+            onClick = { viewModel.onMenuItemClick(SettingsViewModel.MenuAction.CHECK_UPDATE) },
+            showDivider = false
+        )
+        menuItems[SettingsViewModel.MenuAction.CHECK_UPDATE.name]?.setTrailingText(currentVer)
     }
 
     private fun observeViewModel() {
@@ -255,6 +273,9 @@ class SettingsActivity : BaseActivity() {
                                 val intent = Intent(this@SettingsActivity, WebRTCConfigActivity::class.java)
                                 llmConfigLauncher.launch(intent)
                             }
+                            SettingsViewModel.MenuAction.CHECK_UPDATE -> {
+                                checkForUpdate()
+                            }
                             null -> {}
                             else -> {}
                         }
@@ -275,6 +296,87 @@ class SettingsActivity : BaseActivity() {
             message = getString(R.string.unbind_message, channelName, channelName),
             actionTitle = getString(R.string.unbind_action),
             onAction = onUnbind
+        )
+    }
+
+    /**
+     * 检查应用更新
+     */
+    private fun checkForUpdate() {
+        val updater = AppUpdater(this)
+        val loadingDialog = com.apk.claw.android.widget.LoadingDialog.show(
+            context = this,
+            message = getString(R.string.update_checking)
+        )
+
+        lifecycleScope.launch {
+            try {
+                val updateInfo = withContext(Dispatchers.IO) {
+                    updater.checkForUpdate()
+                }
+                loadingDialog.dismiss()
+
+                if (!updateInfo.hasUpdate) {
+                    Toast.makeText(this@SettingsActivity, R.string.update_latest, Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+
+                showUpdateDialog(updater, updateInfo)
+            } catch (e: Exception) {
+                loadingDialog.dismiss()
+                Toast.makeText(this@SettingsActivity, R.string.update_check_failed, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * 显示更新弹窗
+     */
+    private fun showUpdateDialog(updater: AppUpdater, info: AppUpdater.UpdateInfo) {
+        val sizeStr = updater.formatFileSize(info.fileSize)
+        var message = getString(
+            R.string.update_found_message,
+            info.currentVersionName,
+            info.currentVersionCode,
+            info.latestVersionName,
+            info.latestVersionCode,
+            sizeStr.ifEmpty { "N/A" }
+        )
+
+        if (!info.releaseNotes.isNullOrEmpty()) {
+            message += "\n\n" + getString(R.string.update_release_notes, info.releaseNotes)
+        }
+
+        AlertDialog.show(
+            context = this,
+            title = getString(R.string.update_found_title, info.latestVersionName),
+            message = message,
+            actionTitle = getString(R.string.update_btn_install),
+            cancelTitle = getString(R.string.update_btn_browser),
+            onAction = {
+                // Install now
+                if (info.downloadUrl != null) {
+                    val downloadDialog = com.apk.claw.android.widget.LoadingDialog.show(
+                        context = this,
+                        message = getString(R.string.update_downloading_title, info.latestVersionName),
+                        cancelable = true
+                    )
+                    lifecycleScope.launch {
+                        val success = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                            updater.downloadAndInstall(info.downloadUrl, info.latestVersionName)
+                        }
+                        downloadDialog.dismiss()
+                        if (!success) {
+                            Toast.makeText(this@SettingsActivity, R.string.update_download_failed, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            },
+            onCancel = {
+                // Open in browser
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppUpdater.GITHUB_RELEASES_URL))
+                startActivity(intent)
+            }
         )
     }
 }

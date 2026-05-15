@@ -393,4 +393,20 @@
     <string name="voice_error">Voice recognition error</string>
     <string name="voice_no_match">Could not recognize speech</string>
     <string name="voice_permission_required">Microphone permission required</string>
+
+    <!-- App Update -->
+    <string name="menu_check_update">Check for Updates</string>
+    <string name="settings_group_about">About</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_latest">Already on the latest version</string>
+    <string name="update_check_failed">Failed to check for updates</string>
+    <string name="update_found_title">New version available: v%s</string>
+    <string name="update_found_message">Current: v%s (%d)\nLatest: v%s (%d)\nSize: %s</string>
+    <string name="update_release_notes">Release Notes:\n%s</string>
+    <string name="update_btn_install">Install Now</string>
+    <string name="update_btn_browser">Open in Browser</string>
+    <string name="update_btn_later">Later</string>
+    <string name="update_downloading_title">Downloading v%s…</string>
+    <string name="update_download_failed">Download failed, please try again</string>
+    <string name="update_current_version">v%s</string>
 </resources>
