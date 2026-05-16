@@ -74,6 +74,12 @@ object VoiceInteractionFloatWindow {
             updateStatus("松开结束")
         }
 
+        override fun onTranscribing() {
+            isListening = false
+            isProcessing = true
+            updateStatus("正在识别...")
+        }
+
         override fun onPartialResults(text: String) {
             showMessage(text)
         }

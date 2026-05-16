@@ -33,8 +33,8 @@ android {
         applicationId = "com.apk.claw.android"
         minSdk = 28
         targetSdk = 36
-        versionCode = 20
-        versionName = "0.0.22-auto-update"
+        versionCode = 21
+        versionName = "0.0.22-http-stt"
         buildConfigField("String", "VERSION_INFO", getVersionGit())
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

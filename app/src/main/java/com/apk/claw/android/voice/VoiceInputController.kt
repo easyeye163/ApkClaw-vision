@@ -1,52 +1,45 @@
 package com.apk.claw.android.voice
 
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 语音输入控制器
- * 参考 X-OmniClaw 的 VoiceRecorderManager 设计思路，
- * 封装 SpeechRecognizer 生命周期管理，避免 ERROR_RECOGNIZER_BUSY(8) 和 ERROR_CLIENT(11)。
+ *
+ * 使用 HttpSttVoiceRecognizer（AudioRecord + HTTP STT）替代 Android SpeechRecognizer，
+ * 完全避免 ERROR_RECOGNIZER_BUSY(8) 和 ERROR_CLIENT(11) 等国产 ROM 兼容问题。
  *
  * 核心设计：
- * 1. 每次开始前彻底销毁旧实例，避免 busy 冲突
- * 2. 设置 EXTRA_CALLING_PACKAGE，部分国产 ROM 需要此参数
- * 3. 错误后延迟重试，避免立即重建触发 11
- * 4. 不在 onEndOfSpeech 里主动 stopListening，让引擎自然结束
+ * 1. AudioRecord 录制 PCM 16kHz 单声道
+ * 2. 松手后转为 WAV，通过 HTTP POST 发送到 /v1/audio/transcriptions
+ * 3. 复用 LLM 配置中的 baseUrl 和 apiKey
+ * 4. 无需依赖 Google SpeechRecognizer
  */
 class VoiceInputController(private val context: Context) {
 
     companion object {
         private const val TAG = "VoiceInputController"
-        /** 销毁后重建的冷却时间(ms)，避免连续创建触发 ERROR_CLIENT(11) */
-        private const val RECREATE_COOLDOWN_MS = 300L
     }
 
     interface Listener {
-        /** 语音识别开始（onReadyForSpeech） */
+        /** 语音识别开始（录音中） */
         fun onListeningStarted() {}
-        /** 实时中间结果 */
+        /** 录音结束，正在识别中 */
+        fun onTranscribing() {}
+        /** 实时中间结果（HTTP STT 模式下不适用，松手后才返回结果） */
         fun onPartialResults(text: String) {}
         /** 最终结果 */
         fun onFinalResult(text: String) {}
         /** 发生错误 */
         fun onError(errorCode: Int, message: String) {}
-        /** 录音音量变化 (0-15) */
+        /** 录音音量变化 (HTTP STT 模式下不适用) */
         fun onRmsChanged(rmsdB: Float) {}
     }
 
-    private var speechRecognizer: SpeechRecognizer? = null
+    private var sttRecognizer: HttpSttVoiceRecognizer? = null
     private val isListeningAtomic = AtomicBoolean(false)
     private val destroyed = AtomicBoolean(false)
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     var listener: Listener? = null
 
@@ -54,7 +47,7 @@ class VoiceInputController(private val context: Context) {
         get() = isListeningAtomic.get()
 
     /**
-     * 开始语音识别
+     * 开始语音识别（开始录音）
      */
     fun startListening() {
         if (isListeningAtomic.get()) {
@@ -66,141 +59,50 @@ class VoiceInputController(private val context: Context) {
             return
         }
 
-        // 先销毁旧的 Recognizer
-        destroyRecognizer()
+        // 销毁旧的识别器
+        sttRecognizer?.destroy()
 
-        try {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to create SpeechRecognizer", e)
-            listener?.onError(SpeechRecognizer.ERROR_CLIENT, "无法创建语音识别器")
-            return
-        }
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "zh-CN")
-            putExtra(RecognizerIntent.EXTRA_SUPPORTED_LANGUAGES, "zh-CN,en-US")
-            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            // 部分设备需要 EXTRA_PROMPT 才能正常启动
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "")
-        }
-
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                Log.i(TAG, "onReadyForSpeech")
+        val recognizer = HttpSttVoiceRecognizer(context.applicationContext)
+        recognizer.listener = object : HttpSttVoiceRecognizer.Listener {
+            override fun onRecordingStarted() {
+                Log.i(TAG, "Recording started")
                 isListeningAtomic.set(true)
                 listener?.onListeningStarted()
             }
 
-            override fun onBeginningOfSpeech() {
-                Log.i(TAG, "onBeginningOfSpeech")
-            }
-
-            override fun onRmsChanged(rmsdB: Float) {
-                listener?.onRmsChanged(rmsdB)
-            }
-
-            override fun onBufferReceived(buffer: ByteArray?) {}
-
-            override fun onEndOfSpeech() {
-                Log.i(TAG, "onEndOfSpeech")
-                // 不在这里 stopListening，让引擎自然结束
-            }
-
-            override fun onError(error: Int) {
-                Log.w(TAG, "onError: code=$error")
+            override fun onTranscribing() {
+                Log.i(TAG, "Transcribing...")
                 isListeningAtomic.set(false)
-                val msg = when (error) {
-                    SpeechRecognizer.ERROR_NO_MATCH -> "未识别到语音"
-                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没有检测到语音输入"
-                    SpeechRecognizer.ERROR_AUDIO -> "音频录制错误"
-                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音识别器忙碌，请重试"
-                    SpeechRecognizer.ERROR_CLIENT -> "语音识别客户端错误，请重试"
-                    SpeechRecognizer.ERROR_NETWORK -> "网络错误"
-                    SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络超时"
-                    SpeechRecognizer.ERROR_SERVER -> "服务器错误"
-                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "权限不足"
-                    else -> "语音识别错误($error)"
-                }
-                listener?.onError(error, msg)
-
-                // 延迟销毁，避免立即重建触发 ERROR_CLIENT(11) 或 ERROR_RECOGNIZER_BUSY(8)
-                mainHandler.postDelayed({
-                    destroyRecognizer()
-                }, RECREATE_COOLDOWN_MS)
+                listener?.onTranscribing()
             }
 
-            override fun onResults(results: Bundle?) {
-                Log.i(TAG, "onResults")
+            override fun onResult(text: String) {
+                Log.i(TAG, "Result: $text")
                 isListeningAtomic.set(false)
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (!matches.isNullOrEmpty()) {
-                    val text = matches[0]
-                    Log.i(TAG, "Recognized: $text")
-                    listener?.onFinalResult(text)
-                } else {
-                    listener?.onError(SpeechRecognizer.ERROR_NO_MATCH, "未识别到语音")
-                }
-                destroyRecognizer()
+                listener?.onFinalResult(text)
             }
 
-            override fun onPartialResults(partialResults: Bundle?) {
-                val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (!matches.isNullOrEmpty()) {
-                    listener?.onPartialResults(matches[0])
-                }
+            override fun onError(message: String) {
+                Log.w(TAG, "Error: $message")
+                isListeningAtomic.set(false)
+                listener?.onError(ERROR_HTTP_STT, message)
             }
-
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
-
-        try {
-            speechRecognizer?.startListening(intent)
-            Log.i(TAG, "startListening called")
-        } catch (e: Exception) {
-            Log.e(TAG, "startListening failed", e)
-            isListeningAtomic.set(false)
-            listener?.onError(SpeechRecognizer.ERROR_CLIENT, "启动语音识别失败: ${e.message}")
-            destroyRecognizer()
         }
+        sttRecognizer = recognizer
+        recognizer.startRecording()
     }
 
     /**
-     * 停止语音识别（用户主动松手时调用）
+     * 停止语音识别（停止录音并发送识别）
      */
     fun stopListening() {
         if (!isListeningAtomic.get()) return
         Log.i(TAG, "stopListening")
-        isListeningAtomic.set(false)
-        try {
-            // 注意：某些设备调用 stopListening 会触发 ERROR_CLIENT(11)
-            // 仅在 isListening 为 true 时调用
-            speechRecognizer?.stopListening()
-        } catch (e: Exception) {
-            Log.w(TAG, "stopListening error", e)
-        }
-        // 延迟销毁，让 onResults 或 onError 有时间回调
-        mainHandler.postDelayed({
-            destroyRecognizer()
-        }, RECREATE_COOLDOWN_MS)
+        sttRecognizer?.stopRecording()
     }
 
-    /**
-     * 销毁 SpeechRecognizer 实例
-     */
-    private fun destroyRecognizer() {
-        try {
-            speechRecognizer?.cancel()
-            speechRecognizer?.destroy()
-        } catch (e: Exception) {
-            Log.w(TAG, "destroyRecognizer error", e)
-        }
-        speechRecognizer = null
-        isListeningAtomic.set(false)
-    }
+    /** HTTP STT 错误码常量 */
+    private val ERROR_HTTP_STT = 100
 
     /**
      * 完全释放控制器资源
@@ -208,8 +110,8 @@ class VoiceInputController(private val context: Context) {
     fun destroy() {
         destroyed.set(true)
         isListeningAtomic.set(false)
-        mainHandler.removeCallbacksAndMessages(null)
-        destroyRecognizer()
+        sttRecognizer?.destroy()
+        sttRecognizer = null
         listener = null
     }
 }

@@ -467,6 +467,10 @@ class ChatActivity : BaseActivity() {
                 Toast.makeText(this@ChatActivity, getString(R.string.voice_listening), Toast.LENGTH_SHORT).show()
             }
 
+            override fun onTranscribing() {
+                // 录音结束，正在通过 HTTP STT 识别
+            }
+
             override fun onPartialResults(text: String) {
                 etMessage.setText(text)
                 etMessage.setSelection(text.length)
