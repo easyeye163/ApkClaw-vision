@@ -1,7 +1,7 @@
 {
-  "versionCode": 21,
-  "versionName": "0.0.22-http-stt",
-  "downloadUrl": "https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.22-http-stt/ApkClaw-latest.apk",
-  "releaseNotes": "Fix voice recognition error 11 on OPPO: replaced SpeechRecognizer with HTTP STT (AudioRecord + /v1/audio/transcriptions)",
+  "versionCode": 23,
+  "versionName": "0.0.23-auto-update",
+  "downloadUrl": "https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.23-auto-update/ApkClaw-latest.apk",
+  "releaseNotes": "Auto Update + HTTP STT voice fix (no more error 11 on OPPO)",
   "fileSize": 82866176
 }
