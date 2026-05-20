@@ -13,6 +13,7 @@ plugins {
 android {
     namespace = "com.apk.claw.android"
     compileSdk = 36
+    ndkVersion = "27.2.12479018"
 
     signingConfigs {
         create("release") {
@@ -37,6 +38,22 @@ android {
         versionName = "0.0.41"
         buildConfigField("String", "VERSION_INFO", getVersionGit())
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters.add("arm64-v8a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
+                arguments += "-DBUILD_SHARED_LIBS=ON"
+                arguments += "-DLLAMA_BUILD_COMMON=ON"
+                arguments += "-DLLAMA_OPENSSL=OFF"
+                arguments += "-DGGML_NATIVE=OFF"
+                arguments += "-DGGML_LLAMAFILE=ON"
+                arguments += "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16"
+            }
+        }
     }
 
 
@@ -73,6 +90,13 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     packaging {
