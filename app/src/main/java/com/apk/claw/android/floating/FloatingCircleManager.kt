@@ -276,29 +276,6 @@ object FloatingCircleManager {
             }
         }
 
-        /**
-     * 从悬浮菜单启动语音悬浮框（使用回调模式）
-     * 语音识别完成后直接启动 ChatActivity 并传入文本
-     */
-    private fun showVoiceFloatFromMenu(app: Application) {
-        VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
-            try {
-                val intent = android.content.Intent(
-                    app,
-                    com.apk.claw.android.ui.chat.ChatActivity::class.java
-                ).apply {
-                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                            android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    putExtra("voice_text", text)
-                }
-                app.startActivity(intent)
-            } catch (e: Exception) {
-                XLog.e(TAG, "Error starting ChatActivity from voice callback", e)
-            }
-        }
-        VoiceInteractionFloatWindow.show(app)
-    }
-
         // Measure popup to get dimensions
         popupView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         val popupW = popupView.measuredWidth
@@ -370,6 +347,29 @@ object FloatingCircleManager {
             XLog.e(TAG, "Error showing popup overlay", e)
             popupMenuView = null
         }
+    }
+
+    /**
+     * 从悬浮菜单启动语音悬浮框（使用回调模式）
+     * 语音识别完成后直接启动 ChatActivity 并传入文本
+     */
+    private fun showVoiceFloatFromMenu(app: Application) {
+        VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
+            try {
+                val intent = android.content.Intent(
+                    app,
+                    com.apk.claw.android.ui.chat.ChatActivity::class.java
+                ).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("voice_text", text)
+                }
+                app.startActivity(intent)
+            } catch (e: Exception) {
+                XLog.e(TAG, "Error starting ChatActivity from voice callback", e)
+            }
+        }
+        VoiceInteractionFloatWindow.show(app)
     }
 
     /**
