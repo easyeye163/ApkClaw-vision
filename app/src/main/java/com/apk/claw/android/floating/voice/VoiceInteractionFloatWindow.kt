@@ -66,37 +66,64 @@ object VoiceInteractionFloatWindow {
     // Voice controller
     private var voiceController: VoiceInputController? = null
 
+    // 外部回调：当设置了回调时，语音识别完成后直接调用回调，跳过截屏+启动Activity流程
+    var onVoiceResultCallback: ((String) -> Unit)? = null
+
     // Voice listener (separated to avoid lambda capture issues)
+    // 注意：HttpSttVoiceRecognizer 的回调在 Dispatchers.IO 后台线程执行，
+    // 所有 UI 操作必须通过 mainHandler 切换到主线程，否则会崩溃。
     private val voiceListener = object : VoiceInputController.Listener {
         override fun onListeningStarted() {
-            isListening = true
-            isProcessing = false
-            updateStatus("松开结束")
+            mainHandler.post {
+                isListening = true
+                isProcessing = false
+                updateStatus("松开结束")
+            }
         }
 
         override fun onTranscribing() {
-            isListening = false
-            isProcessing = true
-            updateStatus("正在识别...")
+            mainHandler.post {
+                isListening = false
+                isProcessing = true
+                updateStatus("正在识别...")
+            }
         }
 
         override fun onPartialResults(text: String) {
-            showMessage(text)
+            mainHandler.post { showMessage(text) }
         }
 
         override fun onFinalResult(text: String) {
-            isListening = false
-            isProcessing = true
-            updateStatus("正在分析...")
-            showResultMessage("你: $text")
-            captureAndAnalyze(text)
+            mainHandler.post {
+                isListening = false
+                isProcessing = true
+                showResultMessage("你: $text")
+
+                // 如果有外部回调，直接回调（已在主线程），不走截屏+启动Activity流程
+                val callback = onVoiceResultCallback
+                if (callback != null) {
+                    isProcessing = false
+                    updateStatus("按住说话")
+                    try {
+                        callback(text)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Voice result callback error", e)
+                    }
+                } else {
+                    // 默认行为：截屏分析（供无障碍服务截屏场景使用）
+                    updateStatus("正在分析...")
+                    captureAndAnalyze(text)
+                }
+            }
         }
 
         override fun onError(errorCode: Int, message: String) {
-            isListening = false
-            isProcessing = false
-            updateStatus("按住说话")
-            showMessage(message)
+            mainHandler.post {
+                isListening = false
+                isProcessing = false
+                updateStatus("按住说话")
+                showMessage(message)
+            }
         }
     }
 
@@ -184,6 +211,7 @@ object VoiceInteractionFloatWindow {
         isActive = false
         isListening = false
         isProcessing = false
+        onVoiceResultCallback = null
         voiceController?.destroy()
         voiceController = null
         messageClearRunnable?.let { mainHandler.removeCallbacks(it) }
@@ -312,7 +340,7 @@ object VoiceInteractionFloatWindow {
 
                     try {
                         val intent = Intent(app, ChatActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                             putExtra(
                                 com.apk.claw.android.ui.chat.ScreenshotPermissionActivity.EXTRA_SCREENSHOT_PATH,
                                 file.absolutePath
@@ -344,7 +372,7 @@ object VoiceInteractionFloatWindow {
     private fun sendToChatWithoutImage(app: Application, text: String) {
         try {
             val intent = Intent(app, ChatActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra("voice_text", text)
             }
             app.startActivity(intent)

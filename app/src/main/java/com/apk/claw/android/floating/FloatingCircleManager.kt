@@ -253,6 +253,29 @@ object FloatingCircleManager {
                 if (VoiceInteractionFloatWindow.isShowing()) {
                     VoiceInteractionFloatWindow.dismiss()
                 } else {
+                    // 检查录音权限
+                    if (android.content.pm.PackageManager.PERMISSION_GRANTED !=
+                        app.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    ) {
+                        android.widget.Toast.makeText(app, "请先授予麦克风权限（在本地对话界面点击麦克风按钮授权）", android.widget.Toast.LENGTH_LONG).show()
+                        return@setOnClickListener
+                    }
+                    // 使用回调模式：语音识别完成后直接启动ChatActivity并传入文本
+                    VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
+                        try {
+                            val intent = android.content.Intent(
+                                app,
+                                com.apk.claw.android.ui.chat.ChatActivity::class.java
+                            ).apply {
+                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                putExtra("voice_text", text)
+                            }
+                            app.startActivity(intent)
+                        } catch (e: Exception) {
+                            XLog.e(TAG, "Error starting ChatActivity from voice callback", e)
+                        }
+                    }
                     VoiceInteractionFloatWindow.show(app)
                 }
             } catch (e: Exception) {

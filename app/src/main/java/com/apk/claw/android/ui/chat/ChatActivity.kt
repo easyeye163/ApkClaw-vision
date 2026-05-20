@@ -267,6 +267,8 @@ class ChatActivity : BaseActivity() {
         stopListening()
         voiceInputController?.destroy()
         voiceInputController = null
+        // 清除语音悬浮框回调，避免引用已销毁的Activity
+        com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow.onVoiceResultCallback = null
         CloudChatManager.disconnect()
     }
 
@@ -444,17 +446,24 @@ class ChatActivity : BaseActivity() {
     }
 
     private fun toggleVoiceInput() {
-        if (isListening) {
-            stopListening()
-        } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                return
-            }
-            startListening()
+        // 点击麦克风按钮弹出语音悬浮框（与悬浮菜单的语音悬浮框一致）
+        // 使用回调模式：语音识别完成后直接回传文本到当前ChatActivity，避免截屏+重启Activity
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            voicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
         }
+        val voiceFloat = com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
+        voiceFloat.onVoiceResultCallback = { text ->
+            // 在主线程执行UI操作和发送消息
+            runOnUiThread {
+                etMessage.setText(text)
+                etMessage.setSelection(text.length)
+                sendMessage()
+            }
+        }
+        voiceFloat.show(application)
     }
 
     private fun initVoiceController() {
