@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:background="#ff000000" android:layout_width="fill_parent" android:layout_height="fill_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <androidx.camera.view.PreviewView android:id="@id/preview_view" android:layout_width="fill_parent" android:layout_height="fill_parent" />
+    <LinearLayout android:gravity="center_vertical" android:layout_gravity="top" android:orientation="horizontal" android:background="#66000000" android:padding="12.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+        <ImageButton android:id="@id/btn_close_camera" android:background="?selectableItemBackgroundBorderless" android:padding="4.0dip" android:layout_width="36.0dip" android:layout_height="36.0dip" android:src="@android:drawable/ic_menu_close_clear_cancel" android:tint="#ffffffff" android:contentDescription="关闭" />
+        <TextView android:textSize="14.0sp" android:textColor="#ffffffff" android:id="@id/tv_camera_status" android:layout_width="0.0dip" android:layout_height="wrap_content" android:text="正在启动..." android:layout_weight="1.0" android:layout_marginStart="12.0dip" />
+        <TextView android:textSize="12.0sp" android:textColor="#ffff9800" android:id="@id/tv_monitor_status" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    </LinearLayout>
+    <LinearLayout android:gravity="center" android:layout_gravity="bottom" android:orientation="horizontal" android:background="#66000000" android:padding="16.0dip" android:layout_width="fill_parent" android:layout_height="wrap_content">
+        <Button android:textSize="12.0sp" android:textColor="#ffffffff" android:id="@id/btn_switch_camera" android:layout_width="wrap_content" android:layout_height="40.0dip" android:text="切换" android:layout_marginEnd="12.0dip" android:backgroundTint="#33ffffff" />
+        <Button android:textSize="12.0sp" android:textColor="#ffffffff" android:id="@id/btn_toggle_monitor" android:layout_width="wrap_content" android:layout_height="40.0dip" android:text="开始监控" android:layout_marginEnd="12.0dip" android:backgroundTint="#33ffffff" />
+        <Button android:textSize="12.0sp" android:textColor="#ffffffff" android:id="@id/btn_voice_float" android:layout_width="wrap_content" android:layout_height="40.0dip" android:text="语音助手" android:backgroundTint="#331e88e5" />
+    </LinearLayout>
+</FrameLayout>

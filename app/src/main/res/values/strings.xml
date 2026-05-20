@@ -409,4 +409,56 @@
     <string name="update_downloading_title">Downloading v%s…</string>
     <string name="update_download_failed">Download failed, please try again</string>
     <string name="update_current_version">v%s</string>
+
+    <!-- Local Model -->
+    <string name="menu_local_model">Local Model</string>
+    <string name="local_model_config_title">Local Model</string>
+    <string name="local_model_tip">Configure local GGUF model for on-device inference. Based on llama.cpp (MiniCPM-V-Apps).</string>
+    <string name="local_model_select_title">Select Model</string>
+    <string name="local_model_download">Download</string>
+    <string name="local_model_load">Load Model</string>
+    <string name="local_model_reload">Reload</string>
+    <string name="local_model_delete">Delete Model</string>
+    <string name="local_model_redownload">Re-download</string>
+    <string name="local_model_save_params">Save Parameters</string>
+    <string name="local_model_save_server_config">Save Server Config</string>
+    <string name="local_model_params_title">Inference Parameters</string>
+    <string name="local_model_temperature">Temperature</string>
+    <string name="local_model_max_tokens">Max Tokens</string>
+    <string name="local_model_base_url_title">Inference Server Address</string>
+    <string name="local_model_base_url_hint">http://localhost:8080/v1</string>
+    <string name="local_model_base_url_tip">Address of the local model inference server (OpenAI-compatible API format). Default is llama.cpp server.</string>
+    <string name="local_model_api_key_title">API Key</string>
+    <string name="local_model_api_key_hint">local (optional for local server)</string>
+    <string name="local_model_file_size">Size</string>
+    <string name="local_model_download_success">Download complete</string>
+    <string name="local_model_params_saved">Parameters saved</string>
+    <string name="local_model_server_config_saved">Server config saved</string>
+    <string name="local_model_please_download">Please download the model first</string>
+    <string name="local_model_status_not_ready">No model loaded</string>
+    <string name="local_model_status_downloaded">Downloaded, ready to load</string>
+    <string name="local_model_loaded">Model loaded: %s</string>
+    <string name="local_model_status_ready">Model loaded: %s</string>
+    <string name="local_model_deleted">Model files deleted</string>
+    <string name="local_model_delete_confirm_title">Delete Model Files</string>
+    <string name="local_model_delete_confirm_msg">Delete %s model files? You will need to re-download after deletion.</string>
+    <string name="chat_local_model_label">Local Model · %s</string>
+    <string name="chat_local_model_enable_label">Enable</string>
+    <string name="chat_local_model_activated">Local model activated, messages will use local inference</string>
+    <string name="chat_mode_local_model">Local Model (%s)</string>
+
+    <!-- STT Config -->
+    <string name="menu_stt_config">STT Config</string>
+    <string name="stt_config_title">STT Configuration</string>
+    <string name="stt_config_tip">Configure Speech-to-Text service independently. If not configured, the LLM Base URL will be used as fallback.</string>
+    <string name="stt_config_api_key">API Key</string>
+    <string name="stt_config_api_key_hint">STT service API Key (leave empty if same as LLM)</string>
+    <string name="stt_config_base_url">Base URL</string>
+    <string name="stt_config_base_url_hint">e.g. https://api.openai.com/v1/audio/transcriptions</string>
+    <string name="stt_config_base_url_required">Please enter Base URL</string>
+    <string name="stt_config_model_name">Model Name</string>
+    <string name="stt_config_model_name_hint">e.g. whisper-1</string>
+    <string name="stt_config_saved">STT configuration saved</string>
+    <string name="stt_config_clear">Clear Config</string>
+    <string name="stt_config_cleared">STT configuration cleared, will use LLM config</string>
 </resources>

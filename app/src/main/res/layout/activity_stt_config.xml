@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:orientation="vertical" android:background="@color/colorBgSecondary" android:layout_width="fill_parent" android:layout_height="fill_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <com.apk.claw.android.widget.CommonToolbar android:id="@id/toolbar" android:layout_width="fill_parent" android:layout_height="56.0pt" />
+    <ScrollView android:paddingTop="16.0pt" android:clipToPadding="false" android:layout_width="fill_parent" android:layout_height="fill_parent" android:paddingHorizontal="16.0pt">
+        <LinearLayout android:orientation="vertical" android:layout_width="fill_parent" android:layout_height="wrap_content">
+            <TextView android:textSize="14.0pt" android:textColor="@color/colorTextSecondary" android:id="@id/tvTip" android:paddingBottom="16.0pt" android:layout_width="fill_parent" android:layout_height="wrap_content" android:text="@string/stt_config_tip" android:paddingHorizontal="4.0pt" />
+            <TextView android:textSize="14.0pt" android:textStyle="bold" android:textColor="@color/colorTextPrimary" android:paddingBottom="8.0pt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/stt_config_base_url" android:paddingHorizontal="4.0pt" />
+            <androidx.cardview.widget.CardView android:layout_width="fill_parent" android:layout_height="wrap_content" app:cardBackgroundColor="@color/colorContainerBrighten" app:cardCornerRadius="12.0pt" app:cardElevation="1.0pt">
+                <EditText android:textSize="15.0pt" android:textColor="@color/colorTextPrimary" android:textColorHint="@color/colorTextTertiary" android:id="@id/etBaseUrl" android:background="@null" android:layout_width="fill_parent" android:layout_height="48.0pt" android:hint="@string/stt_config_base_url_hint" android:maxLines="1" android:singleLine="true" android:inputType="textUri" android:paddingHorizontal="16.0pt" />
+            </androidx.cardview.widget.CardView>
+            <TextView android:textSize="14.0pt" android:textStyle="bold" android:textColor="@color/colorTextPrimary" android:paddingBottom="8.0pt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20.0pt" android:text="@string/stt_config_api_key" android:paddingHorizontal="4.0pt" />
+            <androidx.cardview.widget.CardView android:layout_width="fill_parent" android:layout_height="wrap_content" app:cardBackgroundColor="@color/colorContainerBrighten" app:cardCornerRadius="12.0pt" app:cardElevation="1.0pt">
+                <EditText android:textSize="15.0pt" android:textColor="@color/colorTextPrimary" android:textColorHint="@color/colorTextTertiary" android:id="@id/etApiKey" android:background="@null" android:layout_width="fill_parent" android:layout_height="48.0pt" android:hint="@string/stt_config_api_key_hint" android:maxLines="1" android:singleLine="true" android:inputType="textPassword" android:paddingHorizontal="16.0pt" />
+            </androidx.cardview.widget.CardView>
+            <TextView android:textSize="14.0pt" android:textStyle="bold" android:textColor="@color/colorTextPrimary" android:paddingBottom="8.0pt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20.0pt" android:text="@string/stt_config_model_name" android:paddingHorizontal="4.0pt" />
+            <androidx.cardview.widget.CardView android:layout_width="fill_parent" android:layout_height="wrap_content" app:cardBackgroundColor="@color/colorContainerBrighten" app:cardCornerRadius="12.0pt" app:cardElevation="1.0pt">
+                <EditText android:textSize="15.0pt" android:textColor="@color/colorTextPrimary" android:textColorHint="@color/colorTextTertiary" android:id="@id/etModelName" android:background="@null" android:layout_width="fill_parent" android:layout_height="48.0pt" android:hint="@string/stt_config_model_name_hint" android:maxLines="1" android:singleLine="true" android:inputType="text" android:paddingHorizontal="16.0pt" />
+            </androidx.cardview.widget.CardView>
+            <com.apk.claw.android.widget.KButton android:textSize="16.0pt" android:id="@id/btnSave" android:layout_width="fill_parent" android:layout_height="48.0pt" android:layout_marginTop="32.0pt" android:text="@string/common_save" />
+            <com.apk.claw.android.widget.KButton android:textSize="16.0pt" android:id="@id/btnClear" android:layout_width="fill_parent" android:layout_height="48.0pt" android:layout_marginTop="12.0pt" android:text="@string/stt_config_clear" app:btnBackground="@color/colorContainerBrighten" app:btnBorderColor="@color/colorBorderBase" app:btnTextColor="@color/colorTextSecondary" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
