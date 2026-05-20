@@ -173,6 +173,12 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@style/Theme.Transparent" />
+        <activity
+            android:name=".ui.chat.PermissionRequestActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.Transparent" />
 
     </application>
 

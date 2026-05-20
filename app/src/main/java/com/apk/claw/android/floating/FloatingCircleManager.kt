@@ -23,6 +23,7 @@ import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
 import com.apk.claw.android.service.ClawAccessibilityService
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
+import com.apk.claw.android.ui.chat.PermissionRequestActivity
 import com.apk.claw.android.webrtc.FloatingAvatarManager
 import com.blankj.utilcode.util.BarUtils
 import com.lzf.easyfloat.EasyFloat
@@ -253,35 +254,50 @@ object FloatingCircleManager {
                 if (VoiceInteractionFloatWindow.isShowing()) {
                     VoiceInteractionFloatWindow.dismiss()
                 } else {
-                    // 检查录音权限
+                    // 检查录音权限，未授权则直接弹出系统权限申请对话框
                     if (android.content.pm.PackageManager.PERMISSION_GRANTED !=
                         app.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                     ) {
-                        android.widget.Toast.makeText(app, "请先授予麦克风权限（在本地对话界面点击麦克风按钮授权）", android.widget.Toast.LENGTH_LONG).show()
+                        PermissionRequestActivity.requestPermission(
+                            app,
+                            android.Manifest.permission.RECORD_AUDIO
+                        ) { granted ->
+                            if (granted) {
+                                // 用户授权后自动打开语音悬浮框
+                                showVoiceFloatFromMenu(app)
+                            }
+                        }
                         return@setOnClickListener
                     }
-                    // 使用回调模式：语音识别完成后直接启动ChatActivity并传入文本
-                    VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
-                        try {
-                            val intent = android.content.Intent(
-                                app,
-                                com.apk.claw.android.ui.chat.ChatActivity::class.java
-                            ).apply {
-                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
-                                        android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                putExtra("voice_text", text)
-                            }
-                            app.startActivity(intent)
-                        } catch (e: Exception) {
-                            XLog.e(TAG, "Error starting ChatActivity from voice callback", e)
-                        }
-                    }
-                    VoiceInteractionFloatWindow.show(app)
+                    showVoiceFloatFromMenu(app)
                 }
             } catch (e: Exception) {
                 XLog.e(TAG, "Error toggling voice float", e)
             }
         }
+
+        /**
+     * 从悬浮菜单启动语音悬浮框（使用回调模式）
+     * 语音识别完成后直接启动 ChatActivity 并传入文本
+     */
+    private fun showVoiceFloatFromMenu(app: Application) {
+        VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
+            try {
+                val intent = android.content.Intent(
+                    app,
+                    com.apk.claw.android.ui.chat.ChatActivity::class.java
+                ).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    putExtra("voice_text", text)
+                }
+                app.startActivity(intent)
+            } catch (e: Exception) {
+                XLog.e(TAG, "Error starting ChatActivity from voice callback", e)
+            }
+        }
+        VoiceInteractionFloatWindow.show(app)
+    }
 
         // Measure popup to get dimensions
         popupView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
