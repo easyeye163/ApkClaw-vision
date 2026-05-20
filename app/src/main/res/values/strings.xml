@@ -461,4 +461,11 @@
     <string name="stt_config_saved">STT configuration saved</string>
     <string name="stt_config_clear">Clear Config</string>
     <string name="stt_config_cleared">STT configuration cleared, will use LLM config</string>
+    <string name="stt_import_export">Import / Export</string>
+    <string name="stt_export_clipboard">Export Config (Clipboard)</string>
+    <string name="stt_import_clipboard">Import Config (Clipboard)</string>
+    <string name="stt_export_success">STT config exported to clipboard</string>
+    <string name="stt_import_clipboard_empty">Clipboard is empty</string>
+    <string name="stt_import_invalid_format">Invalid config format</string>
+    <string name="stt_import_filled">Config loaded, please review and save</string>
 </resources>

@@ -307,6 +307,7 @@ class SettingsViewModel : ViewModel() {
         LAN_CONFIG,
         CLOUD_CHAT,
         LLM_CONFIG,
+        LOCAL_MODEL_CONFIG,
         WEBRTC_CONFIG,
         CHECK_UPDATE
     }

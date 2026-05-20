@@ -40,6 +40,7 @@ import java.io.File
 import java.util.Base64
 import android.widget.Switch
 import android.widget.CompoundButton
+import com.apk.claw.android.floating.voice.TtsManager
 import com.apk.claw.android.webrtc.DirectWebRTCManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -115,6 +116,8 @@ class ChatActivity : BaseActivity() {
     private lateinit var tvConnectionStatus: android.widget.TextView
     private var voiceInputController: VoiceInputController? = null
     private var isListening = false
+    private var ttsManager: TtsManager? = null
+    private var ttsEnabled = false
     private lateinit var adapter: ChatAdapter
 
     private var selectedImageUri: Uri? = null
@@ -200,6 +203,10 @@ class ChatActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_chat)
 
+        // 初始化 TTS
+        ttsEnabled = KVUtils.isTtsEnabled()
+        ttsManager = TtsManager(this)
+
         // 适配 Android 15+ edge-to-edge: 手动处理 IME insets，将输入框推到键盘上方
         val content = findViewById<ViewGroup>(android.R.id.content)
         val rootView = content?.getChildAt(0) as? ViewGroup
@@ -267,6 +274,8 @@ class ChatActivity : BaseActivity() {
         stopListening()
         voiceInputController?.destroy()
         voiceInputController = null
+        ttsManager?.shutdown()
+        ttsManager = null
         // 清除语音悬浮框回调，避免引用已销毁的Activity
         com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow.onVoiceResultCallback = null
         CloudChatManager.disconnect()
@@ -371,6 +380,15 @@ class ChatActivity : BaseActivity() {
         updateModeHint()
         btnVoice = findViewById(R.id.btnVoice)
         btnVoice.setOnClickListener { toggleVoiceInput() }
+        // TTS 语音朗读按钮
+        val btnTts = findViewById<ImageView>(R.id.btnTts)
+        updateTtsButton(btnTts)
+        btnTts.setOnClickListener {
+            ttsEnabled = !ttsEnabled
+            KVUtils.setTtsEnabled(ttsEnabled)
+            updateTtsButton(btnTts)
+            if (!ttsEnabled) ttsManager?.stop()
+        }
         btnRemovePreview.setOnClickListener {
             selectedImageUri = null
             selectedImageData = null
@@ -771,6 +789,7 @@ class ChatActivity : BaseActivity() {
                     ))
                     rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
                     persistChatHistory()
+                    speakAnswer(answer)
                 }
             }
 
@@ -821,6 +840,7 @@ class ChatActivity : BaseActivity() {
                 runOnUiThread {
                     // updateLastMessage 已包含最终文本，无需再添加
                     persistChatHistory()
+                    speakAnswer(answer)
                 }
             }
 
@@ -840,6 +860,28 @@ class ChatActivity : BaseActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * 使用 TTS 朗读 AI 回复（如果 TTS 已启用）
+     */
+    private fun speakAnswer(text: String) {
+        if (ttsEnabled && ttsManager != null) {
+            ttsManager?.speak(text)
+        }
+    }
+
+    /**
+     * 更新 TTS 按钮图标状态
+     */
+    private fun updateTtsButton(btn: ImageView) {
+        if (ttsEnabled) {
+            btn.setImageResource(R.drawable.ic_volume_up)
+            btn.imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.colorBrandPrimary))
+        } else {
+            btn.setImageResource(R.drawable.ic_volume_off)
+            btn.imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.colorTextSecondary))
+        }
     }
 
     data class ChatMessage(

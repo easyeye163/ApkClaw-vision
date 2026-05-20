@@ -180,6 +180,26 @@
             android:noHistory="true"
             android:theme="@style/Theme.Transparent" />
 
+        <!-- 本地模型配置 -->
+        <activity
+            android:name=".ui.settings.LocalModelConfigActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- 摄像头视频流 + 监控 -->
+        <activity
+            android:name=".ui.camera.CameraStreamActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- 视频流监控前台服务 -->
+        <service
+            android:name=".service.monitor.StreamMonitorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+
     </application>
 
 </manifest>

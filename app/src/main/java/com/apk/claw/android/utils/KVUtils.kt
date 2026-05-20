@@ -192,6 +192,14 @@ object KVUtils {
     private const val KEY_LLM_API_KEY = "KEY_LLM_API_KEY"
     private const val KEY_LLM_BASE_URL = "KEY_LLM_BASE_URL"
     private const val KEY_LLM_MODEL_NAME = "KEY_LLM_MODEL_NAME"
+    // 本地模型配置
+    private const val KEY_LOCAL_MODEL_ID = "KEY_LOCAL_MODEL_ID"
+    private const val KEY_LOCAL_MODEL_TEMPERATURE = "KEY_LOCAL_MODEL_TEMPERATURE"
+    private const val KEY_LOCAL_MODEL_MAX_TOKENS = "KEY_LOCAL_MODEL_MAX_TOKENS"
+    private const val KEY_LOCAL_MODEL_BASE_URL = "KEY_LOCAL_MODEL_BASE_URL"
+    private const val KEY_LOCAL_MODEL_API_KEY = "KEY_LOCAL_MODEL_API_KEY"
+    private const val KEY_LOCAL_MODEL_CHAT_ACTIVE = "KEY_LOCAL_MODEL_CHAT_ACTIVE"
+    private const val KEY_LOCAL_MODEL_ENABLED = "KEY_LOCAL_MODEL_ENABLED"
 
     fun getLlmApiKey(): String = getString(KEY_LLM_API_KEY, "")
     fun setLlmApiKey(value: String) = putString(KEY_LLM_API_KEY, value)
@@ -202,6 +210,45 @@ object KVUtils {
 
     /** 是否已配置 LLM（API Key 非空即视为已配置） */
     fun hasLlmConfig(): Boolean = getLlmApiKey().isNotEmpty()
+
+    /** 是否可用聊天（云端 LLM 或本地模型已激活） */
+    fun isChatAvailable(): Boolean = hasLlmConfig() || isLocalModelChatActive()
+
+    // ==================== 本地模型配置 ====================
+    fun getLocalModelId(): String = getString(KEY_LOCAL_MODEL_ID, "qwen2.5-1.5b-q4")
+    fun setLocalModelId(value: String): Boolean = putString(KEY_LOCAL_MODEL_ID, value)
+
+    fun isLocalModelEnabled(): Boolean = getBoolean(KEY_LOCAL_MODEL_ENABLED, false)
+    fun setLocalModelEnabled(enabled: Boolean): Boolean = putBoolean(KEY_LOCAL_MODEL_ENABLED, enabled)
+
+    fun getLocalModelTemperature(): Double = getDouble(KEY_LOCAL_MODEL_TEMPERATURE, 0.7)
+    fun setLocalModelTemperature(value: Double): Boolean = putDouble(KEY_LOCAL_MODEL_TEMPERATURE, value)
+
+    fun getLocalModelMaxTokens(): Int = getInt(KEY_LOCAL_MODEL_MAX_TOKENS, 512)
+    fun setLocalModelMaxTokens(value: Int): Boolean = putInt(KEY_LOCAL_MODEL_MAX_TOKENS, value)
+
+    fun getLocalModelBaseUrl(): String = getString(KEY_LOCAL_MODEL_BASE_URL, "http://localhost:8080/v1")
+    fun setLocalModelBaseUrl(value: String): Boolean = putString(KEY_LOCAL_MODEL_BASE_URL, value)
+
+    fun getLocalModelApiKey(): String = getString(KEY_LOCAL_MODEL_API_KEY, "local")
+    fun setLocalModelApiKey(value: String): Boolean = putString(KEY_LOCAL_MODEL_API_KEY, value)
+
+    fun isLocalModelChatActive(): Boolean = getBoolean(KEY_LOCAL_MODEL_CHAT_ACTIVE, false)
+    fun setLocalModelChatActive(active: Boolean): Boolean = putBoolean(KEY_LOCAL_MODEL_CHAT_ACTIVE, active)
+
+    // ==================== STT（语音识别）配置 ====================
+    private const val KEY_STT_BASE_URL = "KEY_STT_BASE_URL"
+    private const val KEY_STT_API_KEY = "KEY_STT_API_KEY"
+    private const val KEY_STT_MODEL = "KEY_STT_MODEL"
+
+    fun getSttBaseUrl(): String = getString(KEY_STT_BASE_URL, "")
+    fun setSttBaseUrl(value: String): Boolean = putString(KEY_STT_BASE_URL, value)
+
+    fun getSttApiKey(): String = getString(KEY_STT_API_KEY, "")
+    fun setSttApiKey(value: String): Boolean = putString(KEY_STT_API_KEY, value)
+
+    fun getSttModel(): String = getString(KEY_STT_MODEL, "")
+    fun setSttModel(value: String): Boolean = putString(KEY_STT_MODEL, value)
 
     // ==================== 云端对话模式 ====================
     private const val KEY_CLOUD_CHAT_ENABLED = "KEY_CLOUD_CHAT_ENABLED"
@@ -268,4 +315,11 @@ object KVUtils {
     fun setOpenClawWsUrl(value: String) = putString(KEY_CV_OPENCLAW_WS_URL, value)
 
     fun hasCyberVerseConfig(): Boolean = getCyberVerseApiBase().isNotEmpty() && getCyberVerseCharacterId().isNotEmpty()
+
+    // ==================== TTS 语音朗读配置 ====================
+    private const val KEY_TTS_ENABLED = "KEY_TTS_ENABLED"
+
+    /** TTS 语音朗读是否启用（默认关闭） */
+    fun isTtsEnabled(): Boolean = getBoolean(KEY_TTS_ENABLED, false)
+    fun setTtsEnabled(enabled: Boolean) = putBoolean(KEY_TTS_ENABLED, enabled)
 }
