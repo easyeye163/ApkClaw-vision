@@ -36,9 +36,9 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
             return
         }
         tts?.let {
-            it.language = Locale.CHINESE
-            it.speechRate = 0.92f
-            it.pitch = 1.0f
+            it.setLanguage(Locale.CHINESE)
+            it.setSpeechRate(0.92f)
+            it.setPitch(1.0f)
         }
         isReady = true
         Log.i(TAG, "TTS initialized")
