@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
-  "versionName": "0.0.23-auto-update",
-  "downloadUrl": "https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.23-auto-update/ApkClaw-latest.apk",
-  "releaseNotes": "Auto Update + HTTP STT voice fix (no more error 11 on OPPO)",
-  "fileSize": 82866176
+  "versionCode": 50,
+  "versionName": "v0.0.50",
+  "downloadUrl": "https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.50/ApkClaw_v0.0.50.apk",
+  "releaseNotes": "视频流监控+语音vision多模态，自动监控循环，语音介入更新任务",
+  "releaseDate": "2026-05-21"
 }
