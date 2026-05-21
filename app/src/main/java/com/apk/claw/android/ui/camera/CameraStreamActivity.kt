@@ -300,8 +300,9 @@ class CameraStreamActivity : AppCompatActivity() {
             val displayText = "[${monitorRound}] 助手: $reply"
             showResultMessage(displayText)
 
-            // TTS 播报（仅在检测到关键内容时）
-            if (KVUtils.isTtsEnabled() && reply.contains("检测到", ignoreCase = true)) {
+            // TTS 播报每轮回复（先停止上一轮避免重叠）
+            if (KVUtils.isTtsEnabled()) {
+                ttsManager?.stop()
                 speakReply(reply)
             }
         }
