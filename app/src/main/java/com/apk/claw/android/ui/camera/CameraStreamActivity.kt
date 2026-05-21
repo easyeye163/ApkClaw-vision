@@ -12,11 +12,18 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
+import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
 import com.apk.claw.android.floating.voice.VoiceStreamFloatWindow
 import com.apk.claw.android.service.monitor.StreamMonitorController
+import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import com.apk.claw.android.vision.CameraFramePusher
 import com.apk.claw.android.vision.VisionFrameBuffer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class CameraStreamActivity : AppCompatActivity() {
 
@@ -35,6 +42,7 @@ class CameraStreamActivity : AppCompatActivity() {
     private lateinit var btnVoiceFloat: Button
     private lateinit var btnCloseCamera: ImageButton
 
+    private var ttsManager: com.apk.claw.android.floating.voice.TtsManager? = null
     private var cameraFramePusher: CameraFramePusher? = null
     private var isMonitoring = false
     private var lensFacing = LENS_FACING_BACK
@@ -159,11 +167,18 @@ class CameraStreamActivity : AppCompatActivity() {
         }
 
         btnVoiceFloat.setOnClickListener {
-            if (VoiceStreamFloatWindow.isShowing) {
+            if (VoiceInteractionFloatWindow.isShowing()) {
+                VoiceInteractionFloatWindow.dismiss()
                 VoiceStreamFloatWindow.dismiss()
                 btnVoiceFloat.text = "语音助手"
             } else {
                 VoiceStreamFloatWindow.show(application as ClawApplication)
+                VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
+                    // 在悬浮窗内展示用户语音，并通过 LLM 获取回复
+                    showResultMessage("你: $text")
+                    sendToLlmAndReply(text)
+                }
+                VoiceInteractionFloatWindow.show(application as ClawApplication)
                 btnVoiceFloat.text = "隐藏语音"
             }
         }
@@ -188,6 +203,108 @@ class CameraStreamActivity : AppCompatActivity() {
         tvMonitorStatus.text = "监控已停止"
     }
 
+    /**
+     * 在 VoiceStreamFloatWindow 悬浮窗中展示对话结果
+     */
+    private fun showResultMessage(text: String) {
+        VoiceStreamFloatWindow.showMonitorResult(text)
+    }
+
+    /**
+     * 将用户语音文本发送到 LLM 获取回复，结果展示在悬浮窗中（文字+TTS语音）
+     */
+    private fun sendToLlmAndReply(userText: String) {
+        val app = application as ClawApplication
+        val baseUrl = KVUtils.getLlmBaseUrl().trimEnd('/')
+        val apiKey = KVUtils.getLlmApiKey()
+        var modelName = KVUtils.getLlmModelName()
+
+        if (baseUrl.isEmpty() || apiKey.isEmpty()) {
+            showResultMessage("助手: 请先配置 LLM（设置 > 模型 > LLM 配置）")
+            return
+        }
+        if (modelName.isEmpty()) modelName = "gpt-4o"
+
+        showResultMessage("助手: 思考中...")
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val url = when {
+                    baseUrl.endsWith("/v1") -> "$baseUrl/chat/completions"
+                    baseUrl.contains("/v1/") -> "$baseUrl/chat/completions"
+                    else -> "$baseUrl/v1/chat/completions"
+                }
+
+                val messages = listOf(
+                    mapOf("role" to "system", "content" to "你是一个简洁有用的语音助手，用简短的语言回答问题。"),
+                    mapOf("role" to "user", "content" to userText)
+                )
+
+                val bodyMap = mapOf(
+                    "model" to modelName,
+                    "messages" to messages,
+                    "max_tokens" to 300,
+                    "temperature" to 0.7
+                )
+
+                val json = com.google.gson.Gson().toJson(bodyMap)
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+
+                val request = okhttp3.Request.Builder()
+                    .url(url)
+                    .addHeader("Authorization", "Bearer $apiKey")
+                    .addHeader("Content-Type", "application/json")
+                    .post(json.toRequestBody("application/json".toMediaType()))
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    val responseBody = response.body?.string()
+                    if (responseBody == null) {
+                        showResultMessage("助手: 请求失败，无响应")
+                        return@use
+                    }
+                    if (!response.isSuccessful) {
+                        showResultMessage("助手: 请求失败(HTTP ${response.code})")
+                        return@use
+                    }
+                    val jsonResp = org.json.JSONObject(responseBody)
+                    val content = jsonResp.getJSONArray("choices")
+                        .optJSONObject(0)?.getJSONObject("message")
+                        ?.optString("content", "") ?: "无回复"
+
+                    val reply = content.trim()
+                    showResultMessage("助手: $reply")
+
+                    // TTS 语音播报回复
+                    if (com.apk.claw.android.utils.KVUtils.isTtsEnabled()) {
+                        speakReply(reply)
+                    }
+                }
+            } catch (e: Exception) {
+                XLog.e(TAG, "LLM request failed", e)
+                showResultMessage("助手: 请求失败: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * 使用 TTS 语音播报回复内容
+     */
+    private fun speakReply(text: String) {
+        try {
+            if (ttsManager == null) {
+                ttsManager = com.apk.claw.android.floating.voice.TtsManager(application)
+            }
+            ttsManager?.speak(text)
+        } catch (e: Exception) {
+            XLog.e(TAG, "TTS speak failed", e)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
     }
@@ -201,7 +318,10 @@ class CameraStreamActivity : AppCompatActivity() {
         if (isMonitoring) {
             StreamMonitorController.stop()
         }
+        VoiceInteractionFloatWindow.dismiss()
         VoiceStreamFloatWindow.dismiss()
+        ttsManager?.shutdown()
+        ttsManager = null
         cameraFramePusher?.stop()
         cameraFramePusher = null
         VisionFrameBuffer.stop()

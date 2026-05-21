@@ -32,7 +32,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:text="按住说话"
+                android:text="点击开始"
                 android:textColor="#FFFFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -73,7 +73,7 @@
                 android:layout_height="40dp"
                 android:layout_marginBottom="4dp"
                 android:background="@android:color/transparent"
-                android:contentDescription="按住语音"
+                android:contentDescription="开始/停止语音"
                 android:padding="6dp"
                 android:scaleType="centerInside"
                 android:src="@android:drawable/ic_btn_speak_now" />

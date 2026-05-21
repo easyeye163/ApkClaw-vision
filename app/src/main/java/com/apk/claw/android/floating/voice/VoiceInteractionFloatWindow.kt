@@ -77,7 +77,7 @@ object VoiceInteractionFloatWindow {
             mainHandler.post {
                 isListening = true
                 isProcessing = false
-                updateStatus("松开结束")
+                updateStatus("正在聆听，点击结束")
             }
         }
 
@@ -103,7 +103,7 @@ object VoiceInteractionFloatWindow {
                 val callback = onVoiceResultCallback
                 if (callback != null) {
                     isProcessing = false
-                    updateStatus("按住说话")
+                    updateStatus("点击开始")
                     try {
                         callback(text)
                     } catch (e: Exception) {
@@ -121,7 +121,7 @@ object VoiceInteractionFloatWindow {
             mainHandler.post {
                 isListening = false
                 isProcessing = false
-                updateStatus("按住说话")
+                updateStatus("点击开始")
                 showMessage(message)
             }
         }
@@ -251,24 +251,18 @@ object VoiceInteractionFloatWindow {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun bindInteractions(application: Application) {
-        // 按住说话按钮
-        voiceButton?.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (isProcessing) {
-                        showMessage("正在处理中，请稍候")
-                        return@setOnTouchListener true
-                    }
-                    voiceController?.startListening()
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isListening) {
-                        voiceController?.stopListening()
-                    }
-                    true
-                }
-                else -> false
+        // 点击切换：开始聆听 / 结束聆听
+        voiceButton?.setOnClickListener {
+            if (isProcessing) {
+                showMessage("正在处理中，请稍候")
+                return@setOnClickListener
+            }
+            if (isListening) {
+                // 正在聆听 → 点击结束
+                voiceController?.stopListening()
+            } else {
+                // 空闲 → 点击开始聆听
+                voiceController?.startListening()
             }
         }
 

@@ -72,7 +72,7 @@
         android:text="@string/floating_menu_video_stream"
         android:textColor="#E0FFFFFF"
         android:textSize="14sp"
-        android:drawableStart="@drawable/ic_camera"
+        android:drawableStart="@drawable/ic_video_stream"
         android:drawablePadding="10dp"
         android:background="@drawable/bg_popup_menu_item" />
 
