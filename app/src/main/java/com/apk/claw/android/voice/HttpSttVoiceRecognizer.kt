@@ -184,20 +184,23 @@ class HttpSttVoiceRecognizer(private val context: Context) {
                 sttModel = sttModelFromConfig
             }
 
+            XLog.i(TAG, "STT config: baseUrl=$baseUrl, apiKey=${if (apiKey.isNotEmpty()) "***" else "(empty)"}, model=$sttModel")
+
             if (baseUrl.isEmpty()) {
                 listener?.onError("请先配置 STT（设置 > 模型 > STT 配置）")
                 return@withContext
             }
 
-            // 构造 STT API URL
-            val sttUrl = if (baseUrl.endsWith("/v1")) {
-                "$baseUrl/audio/transcriptions"
-            } else if (baseUrl.contains("/v1/")) {
-                // 已包含 /v1/ 路径
-                "${baseUrl}audio/transcriptions"
-            } else {
-                "$baseUrl/v1/audio/transcriptions"
+            // 构造 STT API URL（智能拼接，避免路径重复）
+            val sttUrl = when {
+                baseUrl.endsWith("/audio/transcriptions") -> baseUrl
+                baseUrl.contains("/audio/transcriptions") -> baseUrl
+                baseUrl.endsWith("/v1") -> "$baseUrl/audio/transcriptions"
+                baseUrl.contains("/v1/") -> "${baseUrl}audio/transcriptions"
+                else -> "$baseUrl/v1/audio/transcriptions"
             }
+
+            XLog.i(TAG, "STT request URL: $sttUrl")
 
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -221,7 +224,7 @@ class HttpSttVoiceRecognizer(private val context: Context) {
 
                 if (!response.isSuccessful) {
                     XLog.e(TAG, "STT HTTP ${response.code}: $body")
-                    listener?.onError("语音识别请求失败(HTTP ${response.code})，请检查 STT 配置")
+                    listener?.onError("语音识别失败(HTTP ${response.code})\nURL: $sttUrl")
                     return@withContext
                 }
 
