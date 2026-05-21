@@ -226,6 +226,7 @@ class CameraStreamActivity : AppCompatActivity() {
         if (modelName.isEmpty()) modelName = "gpt-4o"
 
         showResultMessage("助手: 思考中...")
+        XLog.i(TAG, "sendToLlmAndReply: model=$modelName, url will be derived from baseUrl=$baseUrl")
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -249,9 +250,9 @@ class CameraStreamActivity : AppCompatActivity() {
 
                 val json = com.google.gson.Gson().toJson(bodyMap)
                 val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-                    .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                    .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
 
                 val request = okhttp3.Request.Builder()
@@ -284,6 +285,9 @@ class CameraStreamActivity : AppCompatActivity() {
                         speakReply(reply)
                     }
                 }
+            } catch (e: java.net.SocketTimeoutException) {
+                XLog.e(TAG, "LLM request timeout: model=$modelName", e)
+                showResultMessage("助手: LLM请求超时，请检查模型[$modelName]是否支持或网络是否畅通")
             } catch (e: Exception) {
                 XLog.e(TAG, "LLM request failed", e)
                 showResultMessage("助手: 请求失败: ${e.message}")
