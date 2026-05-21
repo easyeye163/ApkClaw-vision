@@ -35,7 +35,7 @@ endif()
 
 # llama.cpp source — path to the cloned llama.cpp submodule
 if(NOT DEFINED LLAMA_SRC)
-    set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../../../MiniCPM-V-Apps/llama.cpp)
+    set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../../../../MiniCPM-V-Apps/llama.cpp)
 endif()
 get_filename_component(LLAMA_SRC ${LLAMA_SRC} ABSOLUTE)
 if(NOT EXISTS ${LLAMA_SRC}/CMakeLists.txt)
