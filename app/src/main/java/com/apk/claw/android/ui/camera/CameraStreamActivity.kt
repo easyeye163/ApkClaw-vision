@@ -1,6 +1,7 @@
 package com.apk.claw.android.ui.camera
 
 import android.os.Bundle
+import android.util.Base64
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
@@ -21,7 +22,13 @@ import com.apk.claw.android.vision.CameraFramePusher
 import com.apk.claw.android.vision.VisionFrameBuffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 
@@ -32,6 +39,7 @@ class CameraStreamActivity : AppCompatActivity() {
         private const val REQUEST_CAMERA_AUDIO = 1001
         private const val LENS_FACING_FRONT = 0
         private const val LENS_FACING_BACK = 1
+        private const val MONITOR_INTERVAL_MS = 5000L // 自动监控间隔5秒
     }
 
     private lateinit var previewView: PreviewView
@@ -46,6 +54,17 @@ class CameraStreamActivity : AppCompatActivity() {
     private var cameraFramePusher: CameraFramePusher? = null
     private var isMonitoring = false
     private var lensFacing = LENS_FACING_BACK
+
+    // 自动监控循环
+    private var monitorScope: CoroutineScope? = null
+    private var monitorJob: Job? = null
+
+    // 监控提示词（可被语音介入更新）
+    @Volatile
+    private var monitorPrompt: String = "请分析当前摄像头画面，描述你看到的内容。"
+
+    // 监控轮次计数
+    private var monitorRound: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -174,9 +193,18 @@ class CameraStreamActivity : AppCompatActivity() {
             } else {
                 VoiceStreamFloatWindow.show(application as ClawApplication)
                 VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
-                    // 在悬浮窗内展示用户语音，并通过 LLM 获取回复
+                    // 在悬浮窗内展示用户语音
                     showResultMessage("你: $text")
-                    sendToLlmAndReply(text)
+
+                    // 如果正在监控，语音介入：更新监控提示词
+                    if (isMonitoring) {
+                        monitorPrompt = text
+                        showResultMessage("助手: 已更新监控任务: $text")
+                        XLog.i(TAG, "Monitor prompt updated by voice: $text")
+                    }
+
+                    // 发送到 LLM（带当前画面）
+                    sendToLlmWithFrame(text)
                 }
                 VoiceInteractionFloatWindow.show(application as ClawApplication)
                 btnVoiceFloat.text = "隐藏语音"
@@ -184,23 +212,99 @@ class CameraStreamActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 开始监控：启动自动循环
+     * 流程：发送提示词 → LLM回复 → 等5秒 → 发送画面 → LLM回复 → 等5秒 → 循环
+     */
     private fun startMonitoring() {
-        if (StreamMonitorController.running) return
+        if (isMonitoring) return
 
-        StreamMonitorController.start(application as ClawApplication)
+        // 确保语音悬浮窗已打开
+        if (!VoiceInteractionFloatWindow.isShowing()) {
+            VoiceStreamFloatWindow.show(application as ClawApplication)
+            VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
+                showResultMessage("你: $text")
+                monitorPrompt = text
+                showResultMessage("助手: 已更新监控任务: $text")
+                XLog.i(TAG, "Monitor prompt updated by voice: $text")
+                sendToLlmWithFrame(text)
+            }
+            VoiceInteractionFloatWindow.show(application as ClawApplication)
+            btnVoiceFloat.text = "隐藏语音"
+        }
+
         isMonitoring = true
+        monitorRound = 0
 
         btnToggleMonitor.text = "停止监控"
         tvMonitorStatus.text = "监控运行中..."
         tvMonitorStatus.visibility = View.VISIBLE
+
+        showResultMessage("监控已启动，任务: $monitorPrompt")
+
+        monitorScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        monitorJob = monitorScope?.launch {
+            while (isActive && isMonitoring) {
+                try {
+                    monitorRound++
+                    sendMonitorFrame()
+                } catch (e: Exception) {
+                    XLog.e(TAG, "Monitor loop error at round $monitorRound", e)
+                }
+                // 等待指定间隔
+                delay(MONITOR_INTERVAL_MS)
+            }
+        }
+
+        XLog.i(TAG, "Auto monitoring started, prompt: $monitorPrompt")
     }
 
+    /**
+     * 停止监控
+     */
     private fun stopMonitoring() {
-        StreamMonitorController.stop()
         isMonitoring = false
+        monitorJob?.cancel()
+        monitorScope?.cancel()
+        monitorJob = null
+        monitorScope = null
 
         btnToggleMonitor.text = "开始监控"
         tvMonitorStatus.text = "监控已停止"
+
+        showResultMessage("监控已停止 (共${monitorRound}轮)")
+
+        XLog.i(TAG, "Auto monitoring stopped after $monitorRound rounds")
+    }
+
+    /**
+     * 发送一帧画面到 LLM 进行监控分析
+     */
+    private suspend fun sendMonitorFrame() {
+        val frameEntry = VisionFrameBuffer.latestFrame
+        if (frameEntry == null) {
+            XLog.w(TAG, "Monitor round $monitorRound: no frame available, skip")
+            return
+        }
+
+        val currentPrompt = monitorPrompt
+        XLog.i(TAG, "Monitor round $monitorRound: analyzing frame, prompt=$currentPrompt")
+
+        val reply = callLlmVision(
+            systemPrompt = "你是一个视频流监控助手。用户会给你摄像头画面和监控任务。请根据任务要求分析画面内容，用简洁的语言描述你看到的情况。如果检测到用户关注的目标或事件，请明确提醒。",
+            userText = currentPrompt,
+            frameJpegBytes = frameEntry.jpegBytes
+        )
+
+        if (reply != null) {
+            val displayText = "[${monitorRound}] 助手: $reply"
+            showResultMessage(displayText)
+
+            // TTS 播报（仅在检测到关键内容时）
+            if (KVUtils.isTtsEnabled() && reply.contains("检测到", ignoreCase = true)) {
+                speakReply(reply)
+            }
+        }
     }
 
     /**
@@ -211,87 +315,177 @@ class CameraStreamActivity : AppCompatActivity() {
     }
 
     /**
-     * 将用户语音文本发送到 LLM 获取回复，结果展示在悬浮窗中（文字+TTS语音）
+     * 将用户语音文本 + 当前摄像头画面一起发送到 LLM（vision多模态）
      */
-    private fun sendToLlmAndReply(userText: String) {
-        val app = application as ClawApplication
-        val baseUrl = KVUtils.getLlmBaseUrl().trimEnd('/')
-        val apiKey = KVUtils.getLlmApiKey()
-        var modelName = KVUtils.getLlmModelName()
-
-        if (baseUrl.isEmpty() || apiKey.isEmpty()) {
-            showResultMessage("助手: 请先配置 LLM（设置 > 模型 > LLM 配置）")
-            return
-        }
-        if (modelName.isEmpty()) modelName = "gpt-4o"
-
-        showResultMessage("助手: 思考中...")
-        XLog.i(TAG, "sendToLlmAndReply: model=$modelName, url will be derived from baseUrl=$baseUrl")
-
+    private fun sendToLlmWithFrame(userText: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val url = when {
-                    baseUrl.endsWith("/v1") -> "$baseUrl/chat/completions"
-                    baseUrl.contains("/v1/") -> "$baseUrl/chat/completions"
-                    else -> "$baseUrl/v1/chat/completions"
-                }
-
-                val messages = listOf(
-                    mapOf("role" to "system", "content" to "你是一个简洁有用的语音助手，用简短的语言回答问题。"),
-                    mapOf("role" to "user", "content" to userText)
-                )
-
-                val bodyMap = mapOf(
-                    "model" to modelName,
-                    "messages" to messages,
-                    "max_tokens" to 300,
-                    "temperature" to 0.7
-                )
-
-                val json = com.google.gson.Gson().toJson(bodyMap)
-                val client = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
-                    .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-
-                val request = okhttp3.Request.Builder()
-                    .url(url)
-                    .addHeader("Authorization", "Bearer $apiKey")
-                    .addHeader("Content-Type", "application/json")
-                    .post(json.toRequestBody("application/json".toMediaType()))
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    val responseBody = response.body?.string()
-                    if (responseBody == null) {
-                        showResultMessage("助手: 请求失败，无响应")
-                        return@use
+                val frameEntry = VisionFrameBuffer.latestFrame
+                if (frameEntry != null) {
+                    // 有画面：使用 vision 模式，同时发送文字和画面
+                    showResultMessage("助手: 思考中（含画面分析）...")
+                    val reply = callLlmVision(
+                        systemPrompt = "你是一个简洁有用的语音助手。用户会给你语音内容和摄像头画面，请结合两者回答。用简短的语言回答。",
+                        userText = userText,
+                        frameJpegBytes = frameEntry.jpegBytes
+                    )
+                    if (reply != null) {
+                        showResultMessage("助手: $reply")
+                        if (KVUtils.isTtsEnabled()) {
+                            speakReply(reply)
+                        }
                     }
-                    if (!response.isSuccessful) {
-                        showResultMessage("助手: 请求失败(HTTP ${response.code})")
-                        return@use
-                    }
-                    val jsonResp = org.json.JSONObject(responseBody)
-                    val content = jsonResp.getJSONArray("choices")
-                        .optJSONObject(0)?.getJSONObject("message")
-                        ?.optString("content", "") ?: "无回复"
-
-                    val reply = content.trim()
-                    showResultMessage("助手: $reply")
-
-                    // TTS 语音播报回复
-                    if (com.apk.claw.android.utils.KVUtils.isTtsEnabled()) {
-                        speakReply(reply)
+                } else {
+                    // 无画面：纯文本模式
+                    showResultMessage("助手: 思考中...")
+                    val reply = callLlmTextOnly(userText)
+                    if (reply != null) {
+                        showResultMessage("助手: $reply")
+                        if (KVUtils.isTtsEnabled()) {
+                            speakReply(reply)
+                        }
                     }
                 }
             } catch (e: java.net.SocketTimeoutException) {
+                val modelName = KVUtils.getLlmModelName().ifEmpty { "gpt-4o" }
                 XLog.e(TAG, "LLM request timeout: model=$modelName", e)
                 showResultMessage("助手: LLM请求超时，请检查模型[$modelName]是否支持或网络是否畅通")
             } catch (e: Exception) {
                 XLog.e(TAG, "LLM request failed", e)
                 showResultMessage("助手: 请求失败: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * 调用 LLM Vision API（带图片 + 文字）
+     * @return 回复文本，失败返回 null
+     */
+    private suspend fun callLlmVision(
+        systemPrompt: String,
+        userText: String,
+        frameJpegBytes: ByteArray
+    ): String? {
+        val baseUrl = KVUtils.getLlmBaseUrl().trimEnd('/')
+        val apiKey = KVUtils.getLlmApiKey()
+        var modelName = KVUtils.getLlmModelName()
+
+        if (baseUrl.isEmpty() || apiKey.isEmpty()) {
+            showResultMessage("助手: 请先配置 LLM（设置 > 模型 > LLM 配置）")
+            return null
+        }
+        if (modelName.isEmpty()) modelName = "gpt-4o"
+
+        val base64Image = Base64.encodeToString(frameJpegBytes, Base64.NO_WRAP)
+
+        val url = buildApiUrl(baseUrl)
+        XLog.i(TAG, "callLlmVision: model=$modelName, url=$url, imageSize=${frameJpegBytes.size / 1024}KB")
+
+        val messages = listOf(
+            mapOf("role" to "system", "content" to systemPrompt),
+            mapOf(
+                "role" to "user",
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to userText),
+                    mapOf(
+                        "type" to "image_url",
+                        "image_url" to mapOf("url" to "data:image/jpeg;base64,$base64Image")
+                    )
+                )
+            )
+        )
+
+        return withContext(Dispatchers.IO) {
+            executeLlmRequest(url, apiKey, modelName, messages)
+        }
+    }
+
+    /**
+     * 调用 LLM 纯文本 API（无图片）
+     * @return 回复文本，失败返回 null
+     */
+    private suspend fun callLlmTextOnly(userText: String): String? {
+        val baseUrl = KVUtils.getLlmBaseUrl().trimEnd('/')
+        val apiKey = KVUtils.getLlmApiKey()
+        var modelName = KVUtils.getLlmModelName()
+
+        if (baseUrl.isEmpty() || apiKey.isEmpty()) {
+            showResultMessage("助手: 请先配置 LLM（设置 > 模型 > LLM 配置）")
+            return null
+        }
+        if (modelName.isEmpty()) modelName = "gpt-4o"
+
+        val url = buildApiUrl(baseUrl)
+        XLog.i(TAG, "callLlmTextOnly: model=$modelName, url=$url")
+
+        val messages = listOf(
+            mapOf("role" to "system", "content" to "你是一个简洁有用的语音助手，用简短的语言回答问题。"),
+            mapOf("role" to "user", "content" to userText)
+        )
+
+        return withContext(Dispatchers.IO) {
+            executeLlmRequest(url, apiKey, modelName, messages)
+        }
+    }
+
+    /**
+     * 执行 LLM HTTP 请求（统一入口）
+     * @return 回复文本，失败返回 null
+     */
+    private fun executeLlmRequest(
+        url: String,
+        apiKey: String,
+        modelName: String,
+        messages: List<Map<String, Any>>
+    ): String? {
+        val bodyMap = mapOf(
+            "model" to modelName,
+            "messages" to messages,
+            "max_tokens" to 300,
+            "temperature" to 0.7
+        )
+
+        val json = com.google.gson.Gson().toJson(bodyMap)
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        val request = okhttp3.Request.Builder()
+            .url(url)
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .post(json.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string()
+            if (responseBody == null) {
+                showResultMessage("助手: 请求失败，无响应")
+                return null
+            }
+            if (!response.isSuccessful) {
+                XLog.e(TAG, "LLM API error: HTTP ${response.code}, body=$responseBody")
+                showResultMessage("助手: 请求失败(HTTP ${response.code})")
+                return null
+            }
+            val jsonResp = org.json.JSONObject(responseBody)
+            val content = jsonResp.getJSONArray("choices")
+                .optJSONObject(0)?.getJSONObject("message")
+                ?.optString("content", "") ?: "无回复"
+            return content.trim()
+        }
+    }
+
+    /**
+     * 智能拼接 API URL
+     */
+    private fun buildApiUrl(baseUrl: String): String {
+        return when {
+            baseUrl.endsWith("/v1") -> "$baseUrl/chat/completions"
+            baseUrl.contains("/v1/") -> "$baseUrl/chat/completions"
+            else -> "$baseUrl/v1/chat/completions"
         }
     }
 
@@ -320,7 +514,7 @@ class CameraStreamActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         if (isMonitoring) {
-            StreamMonitorController.stop()
+            stopMonitoring()
         }
         VoiceInteractionFloatWindow.dismiss()
         VoiceStreamFloatWindow.dismiss()

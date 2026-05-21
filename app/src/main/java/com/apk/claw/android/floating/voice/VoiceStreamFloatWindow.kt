@@ -3,8 +3,6 @@ package com.apk.claw.android.floating.voice
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
-import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -43,6 +41,10 @@ object VoiceStreamFloatWindow {
     private var isActive = false
     private var messageClearRunnable: Runnable? = null
 
+    // 监控模式下的消息记录（保留最近N条）
+    private val monitorMessages = mutableListOf<String>()
+    private val MAX_MONITOR_MESSAGES = 20
+
     val isShowing: Boolean
         get() = try {
             EasyFloat.isShow(FLOAT_TAG)
@@ -60,6 +62,7 @@ object VoiceStreamFloatWindow {
         }
         appRef = application
         isActive = true
+        monitorMessages.clear()
 
         try {
             val topOffset = getStatusBarHeight(application) + 16.dpToPx()
@@ -69,6 +72,9 @@ object VoiceStreamFloatWindow {
                     statusTextView = view.findViewById(R.id.tv_voice_status)
                     messageTextView = view.findViewById(R.id.tv_voice_message)
                     closeButton = view.findViewById(R.id.btn_voice_close)
+
+                    // 监控模式下允许更多行显示
+                    messageTextView?.maxLines = 12
 
                     updateStatus("语音助手")
 
@@ -92,9 +98,11 @@ object VoiceStreamFloatWindow {
     fun dismiss() {
         isActive = false
         messageClearRunnable?.let { mainHandler.removeCallbacks(it) }
+        messageClearRunnable = null
         statusTextView = null
         messageTextView = null
         closeButton = null
+        monitorMessages.clear()
 
         try {
             if (EasyFloat.isShow(FLOAT_TAG)) {
@@ -106,7 +114,8 @@ object VoiceStreamFloatWindow {
     }
 
     /**
-     * 显示监控检测结果 - 供 StreamMonitorController 调用
+     * 显示监控检测结果 - 供 StreamMonitorController 和 CameraStreamActivity 调用
+     * 监控模式下保留最近的消息记录，滚动显示
      */
     fun showMonitorResult(message: String) {
         mainHandler.post {
@@ -117,8 +126,33 @@ object VoiceStreamFloatWindow {
                 }
                 return@post
             }
-            showMessage(message)
-            updateStatus("监控检测")
+
+            // 添加到消息记录
+            monitorMessages.add(message)
+            if (monitorMessages.size > MAX_MONITOR_MESSAGES) {
+                monitorMessages.removeAt(0)
+            }
+
+            // 拼接最近几条消息显示
+            val displayCount = minOf(monitorMessages.size, 6)
+            val recentMessages = monitorMessages.takeLast(displayCount)
+            val displayText = recentMessages.joinToString("\n")
+
+            showMessage(displayText)
+            updateStatus("监控检测 (${monitorMessages.size})")
+        }
+    }
+
+    /**
+     * 重置监控消息记录（停止监控时调用）
+     */
+    fun clearMonitorMessages() {
+        mainHandler.post {
+            monitorMessages.clear()
+            messageTextView?.text = ""
+            messageTextView?.visibility = View.INVISIBLE
+            messageClearRunnable?.let { mainHandler.removeCallbacks(it) }
+            messageClearRunnable = null
         }
     }
 
@@ -129,13 +163,14 @@ object VoiceStreamFloatWindow {
     private fun showMessage(text: String) {
         messageTextView?.text = text
         messageTextView?.visibility = View.VISIBLE
-        // 30秒后自动清除
+        // 监控消息不自动清除（由外部调用 clearMonitorMessages 或 dismiss 处理）
         messageClearRunnable?.let { mainHandler.removeCallbacks(it) }
         messageClearRunnable = Runnable {
             messageTextView?.text = ""
             messageTextView?.visibility = View.INVISIBLE
         }
-        mainHandler.postDelayed(messageClearRunnable!!, 30000L)
+        // 60秒后自动清除（比原来30秒长，适合监控场景）
+        mainHandler.postDelayed(messageClearRunnable!!, 60000L)
     }
 
     private fun getStatusBarHeight(context: Context): Int {

@@ -2,9 +2,10 @@
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/card_voice_root"
-    android:layout_width="220dp"
+    android:layout_width="280dp"
     android:layout_height="wrap_content"
     android:minHeight="80dp"
+    android:maxHeight="360dp"
     app:cardBackgroundColor="#CC111111"
     app:cardCornerRadius="16dp"
     app:cardElevation="6dp"
@@ -43,9 +44,11 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:ellipsize="end"
-                android:maxLines="8"
+                android:maxLines="14"
                 android:textColor="#CCFFFFFF"
                 android:textSize="11sp"
+                android:lineSpacingMultiplier="1.2"
+                android:scrollbars="vertical"
                 android:visibility="invisible" />
 
             <!-- 对话结果展示区域 -->
