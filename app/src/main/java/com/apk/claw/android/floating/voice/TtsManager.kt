@@ -36,12 +36,16 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
             return
         }
         tts?.let {
-            it.setLanguage(Locale.CHINESE)
-            it.setSpeechRate(0.92f)
-            it.setPitch(1.0f)
+            val lang = com.apk.claw.android.utils.KVUtils.getTtsLanguage()
+            val rate = com.apk.claw.android.utils.KVUtils.getTtsSpeechRate()
+            val pitch = com.apk.claw.android.utils.KVUtils.getTtsPitch()
+            val locale = try { Locale.forLanguageTag(lang) } catch (_: Exception) { Locale.CHINESE }
+            it.setLanguage(locale)
+            it.setSpeechRate(rate)
+            it.setPitch(pitch)
         }
         isReady = true
-        Log.i(TAG, "TTS initialized")
+        Log.i(TAG, "TTS initialized (lang=$lang)")
     }
 
     /**

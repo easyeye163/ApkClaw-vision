@@ -318,8 +318,20 @@ object KVUtils {
 
     // ==================== TTS 语音朗读配置 ====================
     private const val KEY_TTS_ENABLED = "KEY_TTS_ENABLED"
+    private const val KEY_TTS_LANGUAGE = "KEY_TTS_LANGUAGE"
+    private const val KEY_TTS_SPEECH_RATE = "KEY_TTS_SPEECH_RATE"
+    private const val KEY_TTS_PITCH = "KEY_TTS_PITCH"
 
     /** TTS 语音朗读是否启用（默认关闭） */
     fun isTtsEnabled(): Boolean = getBoolean(KEY_TTS_ENABLED, false)
     fun setTtsEnabled(enabled: Boolean) = putBoolean(KEY_TTS_ENABLED, enabled)
+
+    fun getTtsLanguage(): String = getString(KEY_TTS_LANGUAGE, "zh-CN")
+    fun setTtsLanguage(value: String): Boolean = putString(KEY_TTS_LANGUAGE, value)
+
+    fun getTtsSpeechRate(): Float = getFloat(KEY_TTS_SPEECH_RATE, 0.92f)
+    fun setTtsSpeechRate(value: Float): Boolean = putFloat(KEY_TTS_SPEECH_RATE, value)
+
+    fun getTtsPitch(): Float = getFloat(KEY_TTS_PITCH, 1.0f)
+    fun setTtsPitch(value: Float): Boolean = putFloat(KEY_TTS_PITCH, value)
 }

@@ -186,6 +186,12 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <!-- TTS 配置 -->
+        <activity
+            android:name=".ui.settings.TtsConfigActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
         <!-- 摄像头视频流 + 监控 -->
         <activity
             android:name=".ui.camera.CameraStreamActivity"

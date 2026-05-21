@@ -112,7 +112,7 @@ class LocalModelConfigActivity : BaseActivity() {
             selectedModel = m
             KVUtils.setLocalModelId(m.id)
             updateUI()
-            Toast.makeText(this, "已选择: ${m.displayName}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.local_model_selected, m.displayName), Toast.LENGTH_SHORT).show()
         }
 
         val recyclerView = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recycler_models)
@@ -227,7 +227,7 @@ class LocalModelConfigActivity : BaseActivity() {
 
     private fun startDownload() {
         if (downloadJob?.isActive == true) {
-            Toast.makeText(this, "正在下载中...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.local_model_downloading), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -241,30 +241,30 @@ class LocalModelConfigActivity : BaseActivity() {
         progressDownload.visibility = View.VISIBLE
         progressDownload.progress = 0
         tvDownloadProgress.visibility = View.VISIBLE
-        tvDownloadProgress.text = "准备下载..."
-        tvModelStatus.text = "正在下载..."
+        tvDownloadProgress.text = getString(R.string.local_model_preparing_download)
+        tvModelStatus.text = getString(R.string.local_model_downloading_status)
 
         downloadJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 downloadFiles()
                 withContext(Dispatchers.Main) {
-                    tvModelStatus.text = "下载完成"
+                    tvModelStatus.text = getString(R.string.local_model_download_complete)
                     tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
-                    tvDownloadProgress.text = "下载完成"
+                    tvDownloadProgress.text = getString(R.string.local_model_download_complete)
                     progressDownload.progress = progressDownload.max
                     updateUI()
                 }
             } catch (e: CancellationException) {
                 withContext(Dispatchers.Main) {
-                    tvModelStatus.text = "下载已取消"
+                    tvModelStatus.text = getString(R.string.local_model_download_cancelled)
                     tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
                     updateUI()
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    tvModelStatus.text = "下载失败"
+                    tvModelStatus.text = getString(R.string.local_model_download_failed)
                     tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
-                    tvDownloadProgress.text = "下载失败: ${e.message}"
+                    tvDownloadProgress.text = getString(R.string.local_model_download_failed_detail, e.message ?: "")
                     updateUI()
                 }
             } finally {
@@ -298,7 +298,7 @@ class LocalModelConfigActivity : BaseActivity() {
         for (url in urls) {
             try {
                 withContext(Dispatchers.Main) {
-                    tvDownloadProgress.text = "正在下载: $fileName"
+                    tvDownloadProgress.text = getString(R.string.local_model_downloading_file, fileName)
                 }
 
                 val request = Request.Builder().url(url).build()
@@ -342,11 +342,11 @@ class LocalModelConfigActivity : BaseActivity() {
                                     val progress = ((bytesRead * 100) / contentLength).toInt()
                                     withContext(Dispatchers.Main) {
                                         progressDownload.progress = progress
-                                        tvDownloadProgress.text = "$fileName: ${formatFileSize(bytesRead)} / ${formatFileSize(contentLength)}"
+                                        tvDownloadProgress.text = getString(R.string.local_model_download_progress, fileName, formatFileSize(bytesRead), formatFileSize(contentLength))
                                     }
                                 } else {
                                     withContext(Dispatchers.Main) {
-                                        tvDownloadProgress.text = "$fileName: ${formatFileSize(bytesRead)}"
+                                        tvDownloadProgress.text = getString(R.string.local_model_download_progress_no_total, fileName, formatFileSize(bytesRead))
                                     }
                                 }
                             }
@@ -359,7 +359,7 @@ class LocalModelConfigActivity : BaseActivity() {
                 // Rename temp file to final file
                 if (tempFile.renameTo(finalFile)) {
                     withContext(Dispatchers.Main) {
-                        tvDownloadProgress.text = "$fileName 下载完成"
+                        tvDownloadProgress.text = getString(R.string.local_model_file_download_complete, fileName)
                     }
                     return
                 } else {
@@ -367,7 +367,7 @@ class LocalModelConfigActivity : BaseActivity() {
                     tempFile.copyTo(finalFile, overwrite = true)
                     tempFile.delete()
                     withContext(Dispatchers.Main) {
-                        tvDownloadProgress.text = "$fileName 下载完成"
+                        tvDownloadProgress.text = getString(R.string.local_model_file_download_complete, fileName)
                     }
                     return
                 }
@@ -382,7 +382,7 @@ class LocalModelConfigActivity : BaseActivity() {
         withContext(Dispatchers.Main) {
             Toast.makeText(
                 this@LocalModelConfigActivity,
-                "下载失败: $fileName，所有镜像源均不可用",
+                getString(R.string.local_model_all_sources_failed, fileName),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -421,7 +421,7 @@ class LocalModelConfigActivity : BaseActivity() {
             return
         }
         btnLoadModel.isEnabled = false
-        tvModelStatus.text = "正在加载模型..."
+        tvModelStatus.text = getString(R.string.local_model_loading)
         tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
 
         lifecycleScope.launch {
@@ -439,11 +439,11 @@ class LocalModelConfigActivity : BaseActivity() {
                 // 检查引擎是否就绪
                 val currentState = engine.state.value
                 if (currentState is com.apk.claw.android.local.llm.LlamaState.Error) {
-                    throw RuntimeException("引擎初始化失败: ${currentState.exception.message}")
+                    throw RuntimeException(getString(R.string.local_model_engine_init_failed) + currentState.exception.message)
                 }
                 if (currentState !is com.apk.claw.android.local.llm.LlamaState.Initialized
                     && currentState !is com.apk.claw.android.local.llm.LlamaState.ModelReady) {
-                    throw RuntimeException("引擎状态异常: ${currentState::class.simpleName}")
+                    throw RuntimeException(getString(R.string.local_model_engine_state_error) + currentState::class.simpleName)
                 }
 
                 val mmprojFile = selectedModel.mmprojFileName?.let { File(File(modelsBaseDir, selectedModel.id), it) }
@@ -452,13 +452,13 @@ class LocalModelConfigActivity : BaseActivity() {
 
                 isModelLoaded = true
                 KVUtils.setLocalModelChatActive(true)
-                tvModelStatus.text = "模型加载成功"
+                tvModelStatus.text = getString(R.string.local_model_load_success)
                 tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
             } catch (e: kotlinx.coroutines.CancellationException) {
-                tvModelStatus.text = "加载已取消"
+                tvModelStatus.text = getString(R.string.local_model_load_cancelled)
                 tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
             } catch (e: Exception) {
-                tvModelStatus.text = "模型加载失败: ${e.message}"
+                tvModelStatus.text = getString(R.string.local_model_load_failed_detail, e.message ?: "")
                 tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
             }
             updateUI()
@@ -485,7 +485,7 @@ class LocalModelConfigActivity : BaseActivity() {
             withContext(Dispatchers.Main) {
                 isModelLoaded = false
                 updateUI()
-                Toast.makeText(this@LocalModelConfigActivity, "模型已删除", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@LocalModelConfigActivity, getString(R.string.local_model_deleted), Toast.LENGTH_SHORT).show()
             }
         }
     }

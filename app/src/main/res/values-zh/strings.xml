@@ -394,4 +394,123 @@
     <string name="voice_error">语音识别出错</string>
     <string name="voice_no_match">无法识别语音内容</string>
     <string name="voice_permission_required">需要麦克风权限</string>
+
+    <!-- 更新检查 -->
+    <string name="menu_check_update">检查更新</string>
+    <string name="settings_group_about">关于</string>
+    <string name="update_checking">正在检查更新…</string>
+    <string name="update_latest">已经是最新版本</string>
+    <string name="update_check_failed">检查更新失败</string>
+    <string name="update_found_title">发现新版本: v%s</string>
+    <string name="update_found_message">当前: v%s (%d)\n最新: v%s (%d)\n大小: %s</string>
+    <string name="update_release_notes">更新日志:\n%s</string>
+    <string name="update_btn_install">立即安装</string>
+    <string name="update_btn_browser">浏览器打开</string>
+    <string name="update_btn_later">稍后</string>
+    <string name="update_downloading_title">正在下载 v%s…</string>
+    <string name="update_download_failed">下载失败，请重试</string>
+    <string name="update_current_version">v%s</string>
+
+    <!-- 本地模型 -->
+    <string name="menu_local_model">本地模型</string>
+    <string name="local_model_config_title">本地模型</string>
+    <string name="local_model_tip">配置本地 GGUF 模型，用于设备端推理。基于 llama.cpp (MiniCPM-V-Apps)。</string>
+    <string name="local_model_select_title">选择模型</string>
+    <string name="local_model_download">下载</string>
+    <string name="local_model_load">加载模型</string>
+    <string name="local_model_reload">重新加载</string>
+    <string name="local_model_delete">删除模型</string>
+    <string name="local_model_redownload">重新下载</string>
+    <string name="local_model_save_params">保存参数</string>
+    <string name="local_model_save_server_config">保存服务端配置</string>
+    <string name="local_model_params_title">推理参数</string>
+    <string name="local_model_temperature">温度</string>
+    <string name="local_model_max_tokens">最大 Token 数</string>
+    <string name="local_model_base_url_title">推理服务地址</string>
+    <string name="local_model_base_url_hint">http://localhost:8080/v1</string>
+    <string name="local_model_base_url_tip">本地模型推理服务地址（OpenAI 兼容 API 格式）。默认为 llama.cpp server。</string>
+    <string name="local_model_api_key_title">API Key</string>
+    <string name="local_model_api_key_hint">local（本地服务可选）</string>
+    <string name="local_model_file_size">大小</string>
+    <string name="local_model_download_success">下载完成</string>
+    <string name="local_model_params_saved">参数已保存</string>
+    <string name="local_model_server_config_saved">服务端配置已保存</string>
+    <string name="local_model_please_download">请先下载模型</string>
+    <string name="local_model_status_not_ready">未加载模型</string>
+    <string name="local_model_status_downloaded">已下载，可以加载</string>
+    <string name="local_model_loaded">模型已加载: %s</string>
+    <string name="local_model_status_ready">模型已加载: %s</string>
+    <string name="local_model_deleted">模型文件已删除</string>
+    <string name="local_model_delete_confirm_title">删除模型文件</string>
+    <string name="local_model_delete_confirm_msg">删除 %s 模型文件？删除后需要重新下载。</string>
+    <string name="chat_local_model_label">本地模型 · %s</string>
+    <string name="chat_local_model_enable_label">启用</string>
+    <string name="chat_local_model_activated">本地模型已激活，消息将使用本地推理</string>
+    <string name="chat_mode_local_model">本地模型 (%s)</string>
+    <string name="local_model_selected">已选择: %s</string>
+    <string name="local_model_downloading">正在下载中…</string>
+    <string name="local_model_preparing_download">准备下载…</string>
+    <string name="local_model_downloading_status">正在下载…</string>
+    <string name="local_model_download_complete">下载完成</string>
+    <string name="local_model_download_cancelled">下载已取消</string>
+    <string name="local_model_download_failed">下载失败</string>
+    <string name="local_model_download_failed_detail">下载失败: %s</string>
+    <string name="local_model_downloading_file">正在下载: %s</string>
+    <string name="local_model_download_progress">%1$s: %2$s / %3$s</string>
+    <string name="local_model_download_progress_no_total">%1$s: %2$s</string>
+    <string name="local_model_file_download_complete">%s 下载完成</string>
+    <string name="local_model_all_sources_failed">下载失败: %s，所有镜像源均不可用</string>
+    <string name="local_model_loading">正在加载模型…</string>
+    <string name="local_model_engine_init_failed">引擎初始化失败: </string>
+    <string name="local_model_engine_state_error">引擎状态异常: </string>
+    <string name="local_model_load_success">模型加载成功</string>
+    <string name="local_model_load_cancelled">加载已取消</string>
+    <string name="local_model_load_failed_detail">模型加载失败: %s</string>
+
+    <!-- STT 配置 -->
+    <string name="menu_stt_config">STT 配置</string>
+    <string name="stt_config_title">语音识别配置</string>
+    <string name="stt_config_tip">独立配置语音识别服务。如未配置，将回退使用 LLM Base URL。</string>
+    <string name="stt_config_api_key">API Key</string>
+    <string name="stt_config_api_key_hint">STT 服务 API Key（与 LLM 相同则留空）</string>
+    <string name="stt_config_base_url">Base URL</string>
+    <string name="stt_config_base_url_hint">如 https://api.openai.com/v1/audio/transcriptions</string>
+    <string name="stt_config_base_url_required">请填写 Base URL</string>
+    <string name="stt_config_model_name">模型名称</string>
+    <string name="stt_config_model_name_hint">如 whisper-1</string>
+    <string name="stt_config_saved">语音识别配置已保存</string>
+    <string name="stt_config_clear">清除配置</string>
+    <string name="stt_config_cleared">语音识别配置已清除，将使用 LLM 配置</string>
+    <string name="stt_import_export">导入 / 导出</string>
+    <string name="stt_export_clipboard">导出配置（剪贴板）</string>
+    <string name="stt_import_clipboard">导入配置（剪贴板）</string>
+    <string name="stt_export_success">语音识别配置已导出到剪贴板</string>
+    <string name="stt_import_clipboard_empty">剪贴板为空</string>
+    <string name="stt_import_invalid_format">配置格式无效</string>
+    <string name="stt_import_filled">配置已加载，请检查后保存</string>
+
+    <!-- 本地模型开关 -->
+    <string name="chat_local_model_switch">本地模型</string>
+    <string name="chat_local_model_not_loaded">请先在设置中加载本地模型</string>
+    <string name="chat_mode_local_llm">本地模式 (本地大模型)</string>
+    <string name="chat_local_model_generating">生成中…</string>
+    <string name="chat_local_model_error">本地模型错误: %s</string>
+    <string name="chat_cloud_mode">云端模式</string>
+
+    <!-- 悬浮菜单视频流 -->
+    <string name="floating_menu_video_stream">视频流</string>
+    <string name="floating_menu_voice_float">语音悬浮框</string>
+
+    <!-- TTS 配置 -->
+    <string name="menu_tts_config">TTS 配置</string>
+    <string name="tts_config_title">TTS 配置</string>
+    <string name="tts_config_tip">配置语音朗读设置，用于 AI 语音回复。</string>
+    <string name="tts_config_enable">启用 TTS</string>
+    <string name="tts_config_language">语言</string>
+    <string name="tts_config_speech_rate">语速</string>
+    <string name="tts_config_pitch">音调</string>
+    <string name="tts_config_test">测试</string>
+    <string name="tts_config_test_text">你好，这是一个语音朗读测试。</string>
+    <string name="tts_config_saved">TTS 配置已保存</string>
+    <string name="tts_config_init_failed">TTS 初始化失败</string>
 </resources>

@@ -308,6 +308,7 @@ class SettingsViewModel : ViewModel() {
         CLOUD_CHAT,
         LLM_CONFIG,
         LOCAL_MODEL_CONFIG,
+        TTS_CONFIG,
         WEBRTC_CONFIG,
         CHECK_UPDATE
     }

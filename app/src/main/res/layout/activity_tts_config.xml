@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/colorBgSecondary">
+
+    <com.apk.claw.android.widget.CommonToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="56pt" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingHorizontal="16pt"
+        android:paddingTop="16pt">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- TTS Enable Switch -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingVertical="12pt"
+                android:paddingHorizontal="4pt">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/tts_config_enable"
+                    android:textSize="15sp"
+                    android:textColor="@color/colorTextPrimary" />
+
+                <Switch
+                    android:id="@+id/switchTtsEnable"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1pt"
+                android:background="@color/colorBorderBase"
+                android:layout_marginBottom="12pt" />
+
+            <!-- Tip -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/tts_config_tip"
+                android:textSize="13sp"
+                android:textColor="@color/colorTextSecondary"
+                android:paddingBottom="12pt"
+                android:paddingHorizontal="4pt" />
+
+            <!-- Language Selector -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tts_config_language"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorTextPrimary"
+                android:paddingBottom="6pt"
+                android:paddingHorizontal="4pt" />
+
+            <Spinner
+                android:id="@+id/spinnerLanguage"
+                android:layout_width="match_parent"
+                android:layout_height="44pt"
+                android:background="@drawable/bg_chat_input"
+                android:paddingHorizontal="12pt"
+                android:layout_marginBottom="16pt" />
+
+            <!-- Speech Rate -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tts_config_speech_rate"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorTextPrimary"
+                android:paddingBottom="6pt"
+                android:paddingHorizontal="4pt" />
+
+            <SeekBar
+                android:id="@+id/seekbarSpeechRate"
+                android:layout_width="match_parent"
+                android:layout_height="40pt"
+                android:max="190"
+                android:progress="82"
+                android:paddingHorizontal="12pt" />
+
+            <TextView
+                android:id="@+id/tvSpeechRateValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0.92"
+                android:textSize="12sp"
+                android:textColor="@color/colorTextTertiary"
+                android:paddingHorizontal="4pt"
+                android:layout_marginBottom="16pt" />
+
+            <!-- Pitch -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/tts_config_pitch"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorTextPrimary"
+                android:paddingBottom="6pt"
+                android:paddingHorizontal="4pt" />
+
+            <SeekBar
+                android:id="@+id/seekbarPitch"
+                android:layout_width="match_parent"
+                android:layout_height="40pt"
+                android:max="150"
+                android:progress="50"
+                android:paddingHorizontal="12pt" />
+
+            <TextView
+                android:id="@+id/tvPitchValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="1.00"
+                android:textSize="12sp"
+                android:textColor="@color/colorTextTertiary"
+                android:paddingHorizontal="4pt"
+                android:layout_marginBottom="24pt" />
+
+            <!-- Test Button -->
+            <com.apk.claw.android.widget.KButton
+                android:id="@+id/btnTestTts"
+                android:layout_width="match_parent"
+                android:layout_height="42pt"
+                android:text="@string/tts_config_test"
+                android:textSize="14sp"
+                android:layout_marginBottom="10pt"
+                app:btnBackground="@color/colorContainerBrighten"
+                app:btnBorderColor="@color/colorBorderBase"
+                app:btnTextColor="@color/colorTextPrimary"
+                xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+            <!-- Save Button -->
+            <com.apk.claw.android.widget.KButton
+                android:id="@+id/btnSaveTts"
+                android:layout_width="match_parent"
+                android:layout_height="42pt"
+                android:text="@string/common_save"
+                android:textSize="14sp"
+                app:btnBackground="@color/colorContainerBrighten"
+                app:btnBorderColor="@color/colorBorderBase"
+                app:btnTextColor="@color/colorTextPrimary"
+                xmlns:app="http://schemas.android.com/apk/res-auto" />
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

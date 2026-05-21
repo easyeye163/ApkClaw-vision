@@ -468,4 +468,51 @@
     <string name="stt_import_clipboard_empty">Clipboard is empty</string>
     <string name="stt_import_invalid_format">Invalid config format</string>
     <string name="stt_import_filled">Config loaded, please review and save</string>
+
+    <!-- Chat Local Model Switch -->
+    <string name="chat_local_model_switch">Local Model</string>
+    <string name="chat_local_model_not_loaded">Please load a local model first in Settings</string>
+    <string name="chat_mode_local_llm">Local Mode (Local LLM)</string>
+    <string name="chat_local_model_generating">Generating…</string>
+    <string name="chat_local_model_error">Local model error: %s</string>
+    <string name="chat_cloud_mode">Cloud Mode</string>
+
+    <!-- Floating Menu Video Stream -->
+    <string name="floating_menu_video_stream">Video Stream</string>
+    <string name="floating_menu_voice_float">Voice Float</string>
+
+    <!-- TTS Config -->
+    <string name="menu_tts_config">TTS Config</string>
+    <string name="tts_config_title">TTS Configuration</string>
+    <string name="tts_config_tip">Configure Text-to-Speech settings for AI voice replies.</string>
+    <string name="tts_config_enable">Enable TTS</string>
+    <string name="tts_config_language">Language</string>
+    <string name="tts_config_speech_rate">Speech Rate</string>
+    <string name="tts_config_pitch">Pitch</string>
+    <string name="tts_config_test">Test</string>
+    <string name="tts_config_test_text">Hello, this is a TTS test.</string>
+    <string name="tts_config_saved">TTS configuration saved</string>
+    <string name="tts_config_init_failed">TTS initialization failed</string>
+
+    <!-- Local Model Localization -->
+    <string name="local_model_selected">Selected: %s</string>
+    <string name="local_model_downloading">Downloading…</string>
+    <string name="local_model_preparing_download">Preparing to download…</string>
+    <string name="local_model_downloading_status">Downloading…</string>
+    <string name="local_model_download_complete">Download complete</string>
+    <string name="local_model_download_cancelled">Download cancelled</string>
+    <string name="local_model_download_failed">Download failed</string>
+    <string name="local_model_download_failed_detail">Download failed: %s</string>
+    <string name="local_model_downloading_file">Downloading: %s</string>
+    <string name="local_model_download_progress">%1$s: %2$s / %3$s</string>
+    <string name="local_model_download_progress_no_total">%1$s: %2$s</string>
+    <string name="local_model_file_download_complete">%s download complete</string>
+    <string name="local_model_all_sources_failed">Download failed: %s, all mirror sources unavailable</string>
+    <string name="local_model_loading">Loading model…</string>
+    <string name="local_model_engine_init_failed">Engine init failed: </string>
+    <string name="local_model_engine_state_error">Engine state error: </string>
+    <string name="local_model_load_success">Model loaded successfully</string>
+    <string name="local_model_load_cancelled">Loading cancelled</string>
+    <string name="local_model_load_failed_detail">Model load failed: %s</string>
+    <string name="local_model_deleted">Model files deleted</string>
 </resources>

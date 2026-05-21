@@ -43,13 +43,27 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="云端模式"
+            android:text="@string/chat_cloud_mode"
             android:textColor="@color/colorTextSecondary"
             android:textSize="11sp"
             android:layout_marginEnd="4pt" />
 
         <Switch
             android:id="@+id/switchCloudMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10pt" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/chat_local_model_switch"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="11sp"
+            android:layout_marginEnd="4pt" />
+
+        <Switch
+            android:id="@+id/switchLocalModel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
 

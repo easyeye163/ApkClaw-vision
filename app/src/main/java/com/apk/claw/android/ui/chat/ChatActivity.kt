@@ -42,6 +42,7 @@ import android.widget.Switch
 import android.widget.CompoundButton
 import com.apk.claw.android.floating.voice.TtsManager
 import com.apk.claw.android.webrtc.DirectWebRTCManager
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -113,6 +114,7 @@ class ChatActivity : BaseActivity() {
     private lateinit var btnRemovePreview: ImageView
     private lateinit var btnVoice: ImageView
     private lateinit var switchCloudMode: Switch
+    private lateinit var switchLocalModel: Switch
     private lateinit var tvConnectionStatus: android.widget.TextView
     private var voiceInputController: VoiceInputController? = null
     private var isListening = false
@@ -363,6 +365,10 @@ class ChatActivity : BaseActivity() {
         switchCloudMode.isChecked = com.apk.claw.android.utils.KVUtils.isCloudChatEnabled()
         switchCloudMode.setOnCheckedChangeListener { _, isChecked ->
             com.apk.claw.android.utils.KVUtils.setCloudChatEnabled(isChecked)
+            if (isChecked && switchLocalModel.isChecked) {
+                switchLocalModel.isChecked = false
+                KVUtils.setLocalModelChatActive(false)
+            }
             updateModeHint()
             if (isChecked) {
                 // 开启云端模式：建立长连接 + 请求通知权限
@@ -376,6 +382,20 @@ class ChatActivity : BaseActivity() {
                 stopObservingConnectionState()
                 tvConnectionStatus.visibility = android.view.View.GONE
             }
+        }
+        // 本地模型开关
+        switchLocalModel = findViewById(R.id.switchLocalModel)
+        switchLocalModel.isChecked = KVUtils.isLocalModelChatActive()
+        switchLocalModel.setOnCheckedChangeListener { _, isChecked ->
+            KVUtils.setLocalModelChatActive(isChecked)
+            if (isChecked && switchCloudMode.isChecked) {
+                switchCloudMode.isChecked = false
+                KVUtils.setCloudChatEnabled(false)
+                CloudChatManager.disconnect()
+                stopObservingConnectionState()
+                tvConnectionStatus.visibility = android.view.View.GONE
+            }
+            updateModeHint()
         }
         updateModeHint()
         btnVoice = findViewById(R.id.btnVoice)
@@ -403,13 +423,20 @@ class ChatActivity : BaseActivity() {
     private fun updateModeHint() {
         tvConnectionStatus = findViewById(R.id.tvConnectionStatus)
         val tvModeHint = findViewById<android.widget.TextView>(R.id.tvModeHint)
-        if (switchCloudMode.isChecked) {
-            val modeName = CloudChatManager.getModeDisplayName()
-            tvModeHint.text = "云端模式 · $modeName"
-            tvModeHint.visibility = View.VISIBLE
-        } else {
-            tvModeHint.text = getString(R.string.chat_mode_local)
-            tvModeHint.visibility = View.VISIBLE
+        when {
+            switchLocalModel.isChecked -> {
+                tvModeHint.text = getString(R.string.chat_mode_local_llm)
+                tvModeHint.visibility = View.VISIBLE
+            }
+            switchCloudMode.isChecked -> {
+                val modeName = CloudChatManager.getModeDisplayName()
+                tvModeHint.text = "${getString(R.string.chat_cloud_mode)} · $modeName"
+                tvModeHint.visibility = View.VISIBLE
+            }
+            else -> {
+                tvModeHint.text = getString(R.string.chat_mode_local)
+                tvModeHint.visibility = View.VISIBLE
+            }
         }
     }
 
@@ -730,11 +757,11 @@ class ChatActivity : BaseActivity() {
         adapter.addMessage(userMessage)
         rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
 
-        // 根据云端模式开关决定走云端还是本地
-        if (switchCloudMode.isChecked) {
-            sendCloudMessage(text)
-        } else {
-            sendLocalMessage(text, imageDataToSend)
+        // 根据开关决定走本地模型、云端还是本地 LLM
+        when {
+            switchLocalModel.isChecked -> sendLocalModelMessage(text)
+            switchCloudMode.isChecked -> sendCloudMessage(text)
+            else -> sendLocalMessage(text, imageDataToSend)
         }
     }
 
@@ -805,6 +832,73 @@ class ChatActivity : BaseActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * 本地模型模式：使用 llama.cpp 引擎直接推理
+     */
+    private fun sendLocalModelMessage(text: String) {
+        val engine = com.apk.claw.android.local.llm.LlamaEngine.getInstance(this)
+        if (!engine.isModelLoaded) {
+            Toast.makeText(this, getString(R.string.chat_local_model_not_loaded), Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val thinkingMessage = ChatMessage(
+            text = getString(R.string.chat_local_model_generating),
+            isUser = false,
+            timestamp = System.currentTimeMillis(),
+            isThinking = true
+        )
+        adapter.addMessage(thinkingMessage)
+        rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+
+        val sb = StringBuilder()
+        lifecycleScope.launch {
+            try {
+                engine.sendUserPrompt(text).collect { token ->
+                    sb.append(token)
+                    runOnUiThread {
+                        if (adapter.getMessages().lastOrNull()?.isThinking == true) {
+                            adapter.updateLastMessage(sb.toString())
+                        } else {
+                            adapter.addMessage(ChatMessage(
+                                text = sb.toString(),
+                                isUser = false,
+                                timestamp = System.currentTimeMillis()
+                            ))
+                        }
+                        rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                    }
+                }
+                runOnUiThread {
+                    val answer = sb.toString()
+                    if (adapter.getMessages().lastOrNull()?.isThinking == true) {
+                        adapter.updateLastMessage(answer)
+                    } else {
+                        adapter.addMessage(ChatMessage(
+                            text = answer,
+                            isUser = false,
+                            timestamp = System.currentTimeMillis()
+                        ))
+                    }
+                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                    persistChatHistory()
+                    speakAnswer(answer)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    val errorMsg = getString(R.string.chat_local_model_error, e.message ?: "Unknown")
+                    adapter.addMessage(ChatMessage(
+                        text = errorMsg,
+                        isUser = false,
+                        timestamp = System.currentTimeMillis()
+                    ))
+                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                    persistChatHistory()
+                }
+            }
+        }
     }
 
     /**

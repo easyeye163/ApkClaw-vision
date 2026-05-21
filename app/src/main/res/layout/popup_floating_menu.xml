@@ -55,10 +55,24 @@
         android:gravity="center_vertical"
         android:paddingStart="14dp"
         android:paddingEnd="14dp"
-        android:text="语音悬浮框"
+        android:text="@string/floating_menu_voice_float"
         android:textColor="#E0FFFFFF"
         android:textSize="14sp"
         android:drawableStart="@drawable/ic_mic"
+        android:drawablePadding="10dp"
+        android:background="@drawable/bg_popup_menu_item" />
+
+    <TextView
+        android:id="@+id/tvMenuVideoStream"
+        android:layout_width="136dp"
+        android:layout_height="40dp"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:text="@string/floating_menu_video_stream"
+        android:textColor="#E0FFFFFF"
+        android:textSize="14sp"
+        android:drawableStart="@drawable/ic_camera"
         android:drawablePadding="10dp"
         android:background="@drawable/bg_popup_menu_item" />
 

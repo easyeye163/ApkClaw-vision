@@ -276,6 +276,24 @@ object FloatingCircleManager {
             }
         }
 
+        // "视频流" option
+        popupView.findViewById<TextView>(R.id.tvMenuVideoStream)?.setOnClickListener {
+            dismissPopupMenu()
+            try {
+                val app = appRef ?: ClawApplication.instance
+                val intent = android.content.Intent(
+                    app,
+                    com.apk.claw.android.ui.camera.CameraStreamActivity::class.java
+                ).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                app.startActivity(intent)
+            } catch (e: Exception) {
+                XLog.e(TAG, "Error opening camera stream", e)
+            }
+        }
+
         // Measure popup to get dimensions
         popupView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         val popupW = popupView.measuredWidth
