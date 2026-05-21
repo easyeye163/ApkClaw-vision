@@ -514,5 +514,4 @@
     <string name="local_model_load_success">Model loaded successfully</string>
     <string name="local_model_load_cancelled">Loading cancelled</string>
     <string name="local_model_load_failed_detail">Model load failed: %s</string>
-    <string name="local_model_deleted">Model files deleted</string>
 </resources>

@@ -35,8 +35,9 @@ class TtsManager(context: Context) : TextToSpeech.OnInitListener {
             Log.e(TAG, "TTS init failed: $status")
             return
         }
+        var lang = "zh-CN"
         tts?.let {
-            val lang = com.apk.claw.android.utils.KVUtils.getTtsLanguage()
+            lang = com.apk.claw.android.utils.KVUtils.getTtsLanguage()
             val rate = com.apk.claw.android.utils.KVUtils.getTtsSpeechRate()
             val pitch = com.apk.claw.android.utils.KVUtils.getTtsPitch()
             val locale = try { Locale.forLanguageTag(lang) } catch (_: Exception) { Locale.CHINESE }
