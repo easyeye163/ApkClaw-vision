@@ -157,6 +157,14 @@ class SettingsActivity : BaseActivity() {
         )
         menuItems[SettingsViewModel.MenuAction.TTS_CONFIG.name]?.setLeadingIconColor(getColor(R.color.colorTextPrimary))
 
+        menuItems[SettingsViewModel.MenuAction.STT_CONFIG.name] = modelGroup.addMenuItem(
+            leadingIcon = R.drawable.ic_mic,
+            title = getString(R.string.menu_stt_config),
+            onClick = { viewModel.onMenuItemClick(SettingsViewModel.MenuAction.STT_CONFIG) },
+            showDivider = false
+        )
+        menuItems[SettingsViewModel.MenuAction.STT_CONFIG.name]?.setLeadingIconColor(getColor(R.color.colorTextPrimary))
+
         menuItems[SettingsViewModel.MenuAction.WEBRTC_CONFIG.name] = modelGroup.addMenuItem(
             leadingIcon = R.drawable.ic_channel_cloud,
             title = getString(R.string.menu_webrtc_config),
@@ -290,6 +298,9 @@ class SettingsActivity : BaseActivity() {
                             }
                             SettingsViewModel.MenuAction.TTS_CONFIG -> {
                                 llmConfigLauncher.launch(Intent(this@SettingsActivity, TtsConfigActivity::class.java))
+                            }
+                            SettingsViewModel.MenuAction.STT_CONFIG -> {
+                                llmConfigLauncher.launch(Intent(this@SettingsActivity, SttConfigActivity::class.java))
                             }
                             SettingsViewModel.MenuAction.WEBRTC_CONFIG -> {
                                 val intent = Intent(this@SettingsActivity, WebRTCConfigActivity::class.java)

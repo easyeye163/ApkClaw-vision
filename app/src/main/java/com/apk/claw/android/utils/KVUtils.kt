@@ -250,6 +250,8 @@ object KVUtils {
     fun getSttModel(): String = getString(KEY_STT_MODEL, "")
     fun setSttModel(value: String): Boolean = putString(KEY_STT_MODEL, value)
 
+    fun hasSttConfig(): Boolean = getSttBaseUrl().isNotEmpty()
+
     // ==================== 云端对话模式 ====================
     private const val KEY_CLOUD_CHAT_ENABLED = "KEY_CLOUD_CHAT_ENABLED"
     private const val KEY_CLOUD_CHAT_WS_URL = "KEY_CLOUD_CHAT_WS_URL"
