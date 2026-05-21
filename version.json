@@ -1,7 +1,7 @@
 {
-  "versionCode": 41,
-  "versionName": "v0.0.41",
-  "downloadUrl": "https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.41/ApkClaw_v0.0.41.apk",
-  "releaseNotes": "悬浮菜单语音权限直接弹窗申请+Fork转独立仓库",
-  "releaseDate": "2026-05-20"
+  "versionCode": 50,
+  "versionName": "v0.0.50",
+  "downloadUrl": "https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.50/ApkClaw_v0.0.50.apk",
+  "releaseNotes": "视频流监控+语音vision多模态，自动监控循环，语音介入更新任务",
+  "releaseDate": "2026-05-21"
 }
