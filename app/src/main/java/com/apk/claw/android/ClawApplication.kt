@@ -56,13 +56,8 @@ class ClawApplication : BaseApp() {
             }
         }, "app-async-init").start()
 
-        // CyberVerse Direct: init WebRTC and auto-connect if configured
+        // CyberVerse Direct: init WebRTC (user manually starts via settings)
         DirectWebRTCManager.init(this)
-        Thread({
-            if (KVUtils.isWebRTCEnabled() && KVUtils.hasCyberVerseConfig()) {
-                DirectWebRTCManager.connect()
-            }
-        }, "cyberverse-direct-init").start()
     }
 
     private fun installCrashHandler() {

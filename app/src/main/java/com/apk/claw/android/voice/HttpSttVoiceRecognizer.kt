@@ -27,12 +27,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * 完全不依赖 Android SpeechRecognizer，兼容国产 ROM（OPPO、vivo 等）。
  *
- * 依赖配置（复用 LLM 配置中的 baseUrl 和 apiKey）：
+ * 依赖独立 STT 配置（设置 > 模型 > STT 配置）：
  * - baseUrl: 需指向兼容 OpenAI /v1/audio/transcriptions 的服务
  * - apiKey: 用于鉴权
+ * - model: STT 模型名称
  *
- * 默认 STT 模型: whisper-1
- * 可通过 setSttModel() 修改
+ * 如果未配置独立 STT，回退使用 LLM 的 baseUrl 和 apiKey。
  */
 class HttpSttVoiceRecognizer(private val context: Context) {
 
@@ -176,12 +176,23 @@ class HttpSttVoiceRecognizer(private val context: Context) {
             val wavData = pcmToWav(pcmData, SAMPLE_RATE, 1, 16)
             XLog.i(TAG, "WAV data: ${wavData.size} bytes, sending to STT...")
 
-            // 从 LLM 配置中获取 baseUrl 和 apiKey
-            var baseUrl = KVUtils.getLlmBaseUrl().trimEnd('/')
-            val apiKey = KVUtils.getLlmApiKey()
+            // 优先从独立 STT 配置中获取，未配置则回退使用 LLM 配置
+            var baseUrl = KVUtils.getSttBaseUrl().trimEnd('/')
+            var apiKey = KVUtils.getSttApiKey()
+            val sttModelFromConfig = KVUtils.getSttModel()
+            if (sttModelFromConfig.isNotEmpty()) {
+                sttModel = sttModelFromConfig
+            }
+
+            if (baseUrl.isEmpty()) {
+                baseUrl = KVUtils.getLlmBaseUrl().trimEnd('/')
+            }
+            if (apiKey.isEmpty()) {
+                apiKey = KVUtils.getLlmApiKey()
+            }
 
             if (baseUrl.isEmpty() || apiKey.isEmpty()) {
-                listener?.onError("请先配置 LLM API Key 和 Base URL（设置 > 模型 > LLM 配置）")
+                listener?.onError("请先配置 STT 或 LLM（设置 > 模型 > STT/LLM 配置）")
                 return@withContext
             }
 

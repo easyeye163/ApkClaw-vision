@@ -56,7 +56,7 @@ class SettingsViewModel : ViewModel() {
             MenuAction.LAN_CONFIG.name to SettingValue.Text(getLanConfigTrailingText()),
             MenuAction.CLOUD_CHAT.name to SettingValue.Text(if (KVUtils.getCloudChatWsUrl().isNotEmpty()) KVUtils.getCloudChatWsUrl() else ClawApplication.instance.getString(R.string.common_unconfigured)),
             MenuAction.WEBRTC_CONFIG.name to SettingValue.Text(if (KVUtils.hasCyberVerseConfig()) "Direct" else ClawApplication.instance.getString(R.string.common_unconfigured)),
-            MenuAction.STT_CONFIG.name to SettingValue.Text(if (KVUtils.hasSttConfig()) KVUtils.getSttBaseUrl() else ClawApplication.instance.getString(R.string.common_unconfigured))
+            MenuAction.STT_CONFIG.name to SettingValue.Text(if (KVUtils.hasSttConfig()) KVUtils.getSttModel() else ClawApplication.instance.getString(R.string.common_unconfigured))
         )
         _settingItems.value = map
     }

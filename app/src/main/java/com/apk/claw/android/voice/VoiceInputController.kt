@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 核心设计：
  * 1. AudioRecord 录制 PCM 16kHz 单声道
  * 2. 松手后转为 WAV，通过 HTTP POST 发送到 /v1/audio/transcriptions
- * 3. 复用 LLM 配置中的 baseUrl 和 apiKey
+ * 3. 优先使用独立 STT 配置，未配置时回退使用 LLM 配置
  * 4. 无需依赖 Google SpeechRecognizer
  */
 class VoiceInputController(private val context: Context) {

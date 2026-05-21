@@ -17,7 +17,7 @@ import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import com.apk.claw.android.agent.AgentCallback
 import com.apk.claw.android.tool.ToolResult
-import com.apk.claw.android.webrtc.FloatingAvatarManager
+
 
 class AppViewModel : ViewModel() {
 
@@ -84,14 +84,6 @@ class AppViewModel : ViewModel() {
         if (android.provider.Settings.canDrawOverlays(ClawApplication.instance)) {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 appViewModelInstance.showFloatingCircle()
-                // Auto-show floating avatar if CyberVerse WebRTC is configured
-                if (KVUtils.isWebRTCEnabled() && KVUtils.hasCyberVerseConfig()) {
-                    try {
-                        FloatingAvatarManager.show()
-                    } catch (e: Exception) {
-                        XLog.e(TAG, "Failed to show floating avatar: ${e.message}")
-                    }
-                }
             }
         }
         channelSetup.setup()

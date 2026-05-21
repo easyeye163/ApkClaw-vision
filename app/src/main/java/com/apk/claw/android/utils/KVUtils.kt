@@ -271,7 +271,7 @@ object KVUtils {
     private const val KEY_WEBRTC_URL = "KEY_WEBRTC_URL"
     private const val KEY_WEBRTC_TOKEN = "KEY_WEBRTC_TOKEN"
 
-    fun isWebRTCEnabled(): Boolean = getBoolean(KEY_WEBRTC_ENABLED, true)
+    fun isWebRTCEnabled(): Boolean = getBoolean(KEY_WEBRTC_ENABLED, false)
     fun setWebRTCEnabled(enabled: Boolean) = putBoolean(KEY_WEBRTC_ENABLED, enabled)
 
     fun getWebRTCUrl(): String = getString(KEY_WEBRTC_URL, "")
