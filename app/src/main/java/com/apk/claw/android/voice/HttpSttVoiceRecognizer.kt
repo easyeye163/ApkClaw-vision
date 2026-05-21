@@ -176,23 +176,16 @@ class HttpSttVoiceRecognizer(private val context: Context) {
             val wavData = pcmToWav(pcmData, SAMPLE_RATE, 1, 16)
             XLog.i(TAG, "WAV data: ${wavData.size} bytes, sending to STT...")
 
-            // 优先从独立 STT 配置中获取，未配置则回退使用 LLM 配置
-            var baseUrl = KVUtils.getSttBaseUrl().trimEnd('/')
-            var apiKey = KVUtils.getSttApiKey()
+            // 仅从独立 STT 配置获取
+            val baseUrl = KVUtils.getSttBaseUrl().trimEnd('/')
+            val apiKey = KVUtils.getSttApiKey()
             val sttModelFromConfig = KVUtils.getSttModel()
             if (sttModelFromConfig.isNotEmpty()) {
                 sttModel = sttModelFromConfig
             }
 
             if (baseUrl.isEmpty()) {
-                baseUrl = KVUtils.getLlmBaseUrl().trimEnd('/')
-            }
-            if (apiKey.isEmpty()) {
-                apiKey = KVUtils.getLlmApiKey()
-            }
-
-            if (baseUrl.isEmpty() || apiKey.isEmpty()) {
-                listener?.onError("请先配置 STT 或 LLM（设置 > 模型 > STT/LLM 配置）")
+                listener?.onError("请先配置 STT（设置 > 模型 > STT 配置）")
                 return@withContext
             }
 
@@ -228,7 +221,7 @@ class HttpSttVoiceRecognizer(private val context: Context) {
 
                 if (!response.isSuccessful) {
                     XLog.e(TAG, "STT HTTP ${response.code}: $body")
-                    listener?.onError("语音识别请求失败(HTTP ${response.code})，请检查 LLM 配置的 Base URL 是否支持 /v1/audio/transcriptions")
+                    listener?.onError("语音识别请求失败(HTTP ${response.code})，请检查 STT 配置")
                     return@withContext
                 }
 
