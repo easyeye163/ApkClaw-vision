@@ -522,4 +522,8 @@
     <string name="local_model_load_success">模型加载成功</string>
     <string name="local_model_load_cancelled">加载已取消</string>
     <string name="local_model_load_failed_detail">模型加载失败：%s</string>
+    <string name="local_model_init_engine">正在初始化推理引擎…</string>
+    <string name="local_model_loading_model">正在加载 %s …</string>
+    <string name="local_model_load_timeout">模型加载超时（120秒），可能模型文件过大或设备内存不足</string>
+    <string name="local_model_load_fail_title">模型加载失败</string>
 </resources>

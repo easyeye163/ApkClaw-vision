@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24.0pt"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <ProgressBar
+        android:layout_width="36.0pt"
+        android:layout_height="36.0pt"
+        android:indeterminate="true" />
+
+    <TextView
+        android:id="@+id/tv_loading_message"
+        android:textSize="13.0pt"
+        android:textColor="@color/colorTextPrimary"
+        android:layout_marginTop="12.0pt"
+        android:gravity="center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/local_model_loading" />
+
+</LinearLayout>

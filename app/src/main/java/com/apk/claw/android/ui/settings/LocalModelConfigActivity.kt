@@ -182,7 +182,7 @@ class LocalModelConfigActivity : BaseActivity() {
         // Update status text
         when {
             isModelLoaded -> {
-                tvModelStatus.setText(getString(R.string.local_model_status_ready))
+                tvModelStatus.text = getString(R.string.local_model_status_ready, selectedModel.displayName)
                 tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
             }
             isDownloaded -> {
@@ -413,6 +413,32 @@ class LocalModelConfigActivity : BaseActivity() {
         return urls
     }
 
+    private var loadingDialog: AlertDialog? = null
+
+    private fun showLoadingDialog(message: String) {
+        if (loadingDialog?.isShowing == true) return
+        val view = layoutInflater.inflate(R.layout.dialog_model_loading, null)
+        val tvMsg = view.findViewById<TextView>(R.id.tv_loading_message)
+        tvMsg?.text = message
+        loadingDialog = AlertDialog.Builder(this)
+            .setView(view)
+            .setCancelable(false)
+            .create()
+        loadingDialog?.show()
+    }
+
+    private fun updateLoadingDialog(message: String) {
+        loadingDialog?.let { dialog ->
+            val tvMsg = dialog.findViewById<TextView>(R.id.tv_loading_message)
+            tvMsg?.text = message
+        }
+    }
+
+    private fun dismissLoadingDialog() {
+        loadingDialog?.dismiss()
+        loadingDialog = null
+    }
+
     private fun loadModel() {
         val modelDir = File(modelsBaseDir, selectedModel.id)
         val ggufFile = File(modelDir, selectedModel.ggufFileName)
@@ -423,12 +449,16 @@ class LocalModelConfigActivity : BaseActivity() {
         btnLoadModel.isEnabled = false
         tvModelStatus.text = getString(R.string.local_model_loading)
         tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
+        showLoadingDialog(getString(R.string.local_model_loading))
 
         lifecycleScope.launch {
             try {
+                android.util.Log.d(TAG, "loadModel: 获取引擎实例...")
                 val engine = com.apk.claw.android.local.llm.LlamaEngine.getInstance(this@LocalModelConfigActivity)
+                android.util.Log.d(TAG, "loadModel: 引擎实例获取成功，当前状态=${engine.state.value::class.simpleName}")
 
-                // 等待引擎初始化完成
+                // 等待引擎初始化完成（最多 30 秒）
+                updateLoadingDialog(getString(R.string.local_model_init_engine))
                 kotlinx.coroutines.withTimeoutOrNull(30_000) {
                     while (engine.state.value is com.apk.claw.android.local.llm.LlamaState.Uninitialized
                         || engine.state.value is com.apk.claw.android.local.llm.LlamaState.Initializing) {
@@ -438,29 +468,53 @@ class LocalModelConfigActivity : BaseActivity() {
 
                 // 检查引擎是否就绪
                 val currentState = engine.state.value
+                android.util.Log.d(TAG, "loadModel: 引擎状态=${currentState::class.simpleName}")
                 if (currentState is com.apk.claw.android.local.llm.LlamaState.Error) {
-                    throw RuntimeException(getString(R.string.local_model_engine_init_failed) + currentState.exception.message)
+                    val errMsg = currentState.exception?.message ?: "Unknown error"
+                    android.util.Log.e(TAG, "loadModel: 引擎初始化失败: $errMsg", currentState.exception)
+                    throw RuntimeException(getString(R.string.local_model_engine_init_failed) + errMsg)
                 }
                 if (currentState !is com.apk.claw.android.local.llm.LlamaState.Initialized
                     && currentState !is com.apk.claw.android.local.llm.LlamaState.ModelReady) {
-                    throw RuntimeException(getString(R.string.local_model_engine_state_error) + currentState::class.simpleName)
+                    val stateName = currentState::class.simpleName ?: "Unknown"
+                    android.util.Log.e(TAG, "loadModel: 引擎状态异常: $stateName")
+                    throw RuntimeException(getString(R.string.local_model_engine_state_error) + stateName)
                 }
 
                 val mmprojFile = selectedModel.mmprojFileName?.let { File(File(modelsBaseDir, selectedModel.id), it) }
 
-                engine.loadModel(ggufFile.absolutePath, mmprojFile?.absolutePath)
+                // 加载模型（最多 120 秒超时）
+                val loadMsg = getString(R.string.local_model_loading_model, selectedModel.displayName)
+                updateLoadingDialog(loadMsg)
+                android.util.Log.d(TAG, "loadModel: 开始加载模型文件 ${ggufFile.absolutePath}")
+                kotlinx.coroutines.withTimeoutOrNull(120_000) {
+                    engine.loadModel(ggufFile.absolutePath, mmprojFile?.absolutePath)
+                } ?: run {
+                    android.util.Log.e(TAG, "loadModel: 模型加载超时（120秒）")
+                    throw RuntimeException(getString(R.string.local_model_load_timeout))
+                }
 
                 isModelLoaded = true
                 KVUtils.setLocalModelChatActive(true)
-                tvModelStatus.text = getString(R.string.local_model_load_success)
+                tvModelStatus.text = getString(R.string.local_model_status_ready, selectedModel.displayName)
                 tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
+                Toast.makeText(this@LocalModelConfigActivity, getString(R.string.local_model_load_success), Toast.LENGTH_LONG).show()
             } catch (e: kotlinx.coroutines.CancellationException) {
+                android.util.Log.w(TAG, "loadModel: 已取消")
                 tvModelStatus.text = getString(R.string.local_model_load_cancelled)
                 tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
             } catch (e: Exception) {
-                tvModelStatus.text = getString(R.string.local_model_load_failed_detail, e.message ?: "")
-                tvModelStatus.setTextColor(getColor(R.color.colorTextSecondary))
+                val errorMsg = e.message ?: "未知错误"
+                android.util.Log.e(TAG, "loadModel failed", e)
+                tvModelStatus.text = getString(R.string.local_model_load_failed_detail, errorMsg)
+                tvModelStatus.setTextColor(getColor(R.color.colorErrorPrimary))
+                AlertDialog.Builder(this@LocalModelConfigActivity)
+                    .setTitle(getString(R.string.local_model_load_fail_title))
+                    .setMessage(errorMsg)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
             }
+            dismissLoadingDialog()
             updateUI()
         }
     }
@@ -502,5 +556,6 @@ class LocalModelConfigActivity : BaseActivity() {
     override fun onDestroy() {
         super.onDestroy()
         downloadJob?.cancel()
+        dismissLoadingDialog()
     }
 }
