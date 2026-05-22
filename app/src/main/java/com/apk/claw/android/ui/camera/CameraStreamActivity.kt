@@ -13,6 +13,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
+import com.apk.claw.android.local.llm.LlamaEngine
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
 import com.apk.claw.android.service.monitor.StreamMonitorController
 import com.apk.claw.android.utils.KVUtils
@@ -282,11 +283,24 @@ class CameraStreamActivity : AppCompatActivity() {
         val currentPrompt = monitorPrompt
         XLog.i(TAG, "Monitor round $monitorRound: analyzing frame, prompt=$currentPrompt")
 
-        val reply = callLlmVision(
-            systemPrompt = "你是一个视频流监控助手。用户会给你摄像头画面和监控任务。请根据任务要求分析画面内容，用简洁的语言描述你看到的情况。如果检测到用户关注的目标或事件，请明确提醒。",
-            userText = currentPrompt,
-            frameJpegBytes = frameEntry.jpegBytes
-        )
+        // 优先使用本地模型
+        val reply = if (KVUtils.isLocalModelChatActive()) {
+            callLocalModelVision(
+                systemPrompt = "你是一个视频流监控助手。用户会给你摄像头画面和监控任务。请根据任务要求分析画面内容，用简洁的语言描述你看到的情况。如果检测到用户关注的目标或事件，请明确提醒。",
+                userText = currentPrompt,
+                frameJpegBytes = frameEntry.jpegBytes
+            ) ?: callLlmVision(
+                systemPrompt = "你是一个视频流监控助手。用户会给你摄像头画面和监控任务。请根据任务要求分析画面内容，用简洁的语言描述你看到的情况。如果检测到用户关注的目标或事件，请明确提醒。",
+                userText = currentPrompt,
+                frameJpegBytes = frameEntry.jpegBytes
+            )
+        } else {
+            callLlmVision(
+                systemPrompt = "你是一个视频流监控助手。用户会给你摄像头画面和监控任务。请根据任务要求分析画面内容，用简洁的语言描述你看到的情况。如果检测到用户关注的目标或事件，请明确提醒。",
+                userText = currentPrompt,
+                frameJpegBytes = frameEntry.jpegBytes
+            )
+        }
 
         if (reply != null) {
             val displayText = "[${monitorRound}] 助手: $reply"
@@ -312,13 +326,25 @@ class CameraStreamActivity : AppCompatActivity() {
             try {
                 val frameEntry = VisionFrameBuffer.latestFrame
                 if (frameEntry != null) {
-                    // 有画面：使用 vision 模式，同时发送文字和画面
                     showResultMessage("助手: 思考中（含画面分析）...")
-                    val reply = callLlmVision(
-                        systemPrompt = "你是一个简洁有用的语音助手。用户会给你语音内容和摄像头画面，请结合两者回答。用简短的语言回答。",
-                        userText = userText,
-                        frameJpegBytes = frameEntry.jpegBytes
-                    )
+                    // 优先使用本地模型
+                    val reply = if (KVUtils.isLocalModelChatActive()) {
+                        callLocalModelVision(
+                            systemPrompt = "你是一个简洁有用的语音助手。用户会给你语音内容和摄像头画面，请结合两者回答。用简短的语言回答。",
+                            userText = userText,
+                            frameJpegBytes = frameEntry.jpegBytes
+                        ) ?: callLlmVision(
+                            systemPrompt = "你是一个简洁有用的语音助手。用户会给你语音内容和摄像头画面，请结合两者回答。用简短的语言回答。",
+                            userText = userText,
+                            frameJpegBytes = frameEntry.jpegBytes
+                        )
+                    } else {
+                        callLlmVision(
+                            systemPrompt = "你是一个简洁有用的语音助手。用户会给你语音内容和摄像头画面，请结合两者回答。用简短的语言回答。",
+                            userText = userText,
+                            frameJpegBytes = frameEntry.jpegBytes
+                        )
+                    }
                     if (reply != null) {
                         showResultMessage("助手: $reply")
                         if (KVUtils.isTtsEnabled()) {
@@ -326,9 +352,12 @@ class CameraStreamActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    // 无画面：纯文本模式
                     showResultMessage("助手: 思考中...")
-                    val reply = callLlmTextOnly(userText)
+                    val reply = if (KVUtils.isLocalModelChatActive()) {
+                        callLocalModelTextOnly(userText) ?: callLlmTextOnly(userText)
+                    } else {
+                        callLlmTextOnly(userText)
+                    }
                     if (reply != null) {
                         showResultMessage("助手: $reply")
                         if (KVUtils.isTtsEnabled()) {
@@ -344,6 +373,59 @@ class CameraStreamActivity : AppCompatActivity() {
                 XLog.e(TAG, "LLM request failed", e)
                 showResultMessage("助手: 请求失败: ${e.message}")
             }
+        }
+    }
+
+    /**
+     * 使用本地 LlamaEngine 分析（带图片 + 文字）
+     * @return 回复文本，失败返回 null（回退到 HTTP）
+     */
+    private suspend fun callLocalModelVision(
+        systemPrompt: String,
+        userText: String,
+        frameJpegBytes: ByteArray
+    ): String? {
+        val engine = LlamaEngine.getInstance(application)
+        if (!engine.isModelLoaded || !engine._mmprojLoaded) {
+            XLog.w(TAG, "Local model not ready for vision analysis")
+            return null
+        }
+        return try {
+            engine.fullReset()
+            engine.setSystemPrompt(systemPrompt)
+            engine.prefillImage(frameJpegBytes)
+            val resultBuilder = StringBuilder()
+            engine.sendUserPrompt(userText, 300).collect { token ->
+                resultBuilder.append(token)
+            }
+            resultBuilder.toString().trim().ifEmpty { null }
+        } catch (e: Exception) {
+            XLog.w(TAG, "Local model vision failed, fallback to HTTP", e)
+            null
+        }
+    }
+
+    /**
+     * 使用本地 LlamaEngine 分析（纯文本）
+     * @return 回复文本，失败返回 null（回退到 HTTP）
+     */
+    private suspend fun callLocalModelTextOnly(userText: String): String? {
+        val engine = LlamaEngine.getInstance(application)
+        if (!engine.isModelLoaded) {
+            XLog.w(TAG, "Local model not ready for text analysis")
+            return null
+        }
+        return try {
+            engine.fullReset()
+            engine.setSystemPrompt("你是一个简洁有用的语音助手，用简短的语言回答问题。")
+            val resultBuilder = StringBuilder()
+            engine.sendUserPrompt(userText, 300).collect { token ->
+                resultBuilder.append(token)
+            }
+            resultBuilder.toString().trim().ifEmpty { null }
+        } catch (e: Exception) {
+            XLog.w(TAG, "Local model text failed, fallback to HTTP", e)
+            null
         }
     }
 

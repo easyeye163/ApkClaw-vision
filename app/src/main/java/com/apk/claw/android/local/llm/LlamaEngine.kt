@@ -114,7 +114,9 @@ class LlamaEngine private constructor(
                 Log.i(TAG, CpuFeatures.summary())
 
                 // 按依赖顺序显式加载 native 库，避免部分 Android 设备自动解析失败
-                val libsToLoad = listOf("omp", "ggml-base", "ggml", "llama-common", "llama", "ggml-cpu")
+                // libc++_shared 必须最先加载（C++ STL）
+                System.loadLibrary("c++_shared")
+                val libsToLoad = listOf("omp", "ggml-base", "ggml", "llama-common", "llama", "ggml-cpu", "mtmd")
                 for (lib in libsToLoad) {
                     try {
                         System.loadLibrary(lib)
@@ -193,9 +195,16 @@ class LlamaEngine private constructor(
                     _mmprojLoaded = false
                 }
 
+                // 初始化推理上下文（必须在 load 之后、推理之前调用）
+                Log.i(TAG, "Preparing inference context...")
+                val prepareRet = prepare()
+                if (prepareRet != 0) {
+                    throw RuntimeException("Failed to prepare inference context (ret=$prepareRet)")
+                }
+
                 _state.value = LlamaState.ModelReady
                 _readyForSystemPrompt = true
-                Log.i(TAG, "Model loaded successfully")
+                Log.i(TAG, "Model loaded and prepared successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load model", e)
                 _state.value = LlamaState.Error(e)
