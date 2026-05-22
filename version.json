@@ -1,1 +1,1 @@
-{"versionCode":60,"versionName":"v0.0.60","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.60/ApkClaw_v0.0.60_release.apk","releaseNotes":"视频流和屏幕流TTS朗读也过滤Markdown格式","releaseDate":"2026-05-22","fileSize":64444398}
+{"versionCode":61,"versionName":"v0.0.61","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.61/ApkClaw_v0.0.61_release.apk","releaseNotes":"修复native库丢失导致本地模型无法加载","releaseDate":"2026-05-22","fileSize":64444398}
