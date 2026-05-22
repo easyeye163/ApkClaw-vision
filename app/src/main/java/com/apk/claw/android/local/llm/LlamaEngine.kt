@@ -113,7 +113,18 @@ class LlamaEngine private constructor(
                 Log.i(TAG, "Loading native library...")
                 Log.i(TAG, CpuFeatures.summary())
 
-                // 尝试加载优化版 ggml-cpu
+                // 按依赖顺序显式加载 native 库，避免部分 Android 设备自动解析失败
+                val libsToLoad = listOf("omp", "ggml-base", "ggml", "llama-common", "llama", "ggml-cpu")
+                for (lib in libsToLoad) {
+                    try {
+                        System.loadLibrary(lib)
+                        Log.d(TAG, "Loaded lib$lib.so")
+                    } catch (e: UnsatisfiedLinkError) {
+                        Log.w(TAG, "Failed to load lib$lib.so (may be optional)", e)
+                    }
+                }
+
+                // 尝试加载优化版 ggml-cpu（如果支持）
                 val bestVariant = CpuFeatures.bestGgmlCpuVariant()
                 if (bestVariant != null) {
                     try {
@@ -131,9 +142,9 @@ class LlamaEngine private constructor(
                 _state.value = LlamaState.Initialized
                 Log.i(TAG, "Native library loaded! System info:\n${systemInfo()}")
             } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "Native library not available in this build. On-device inference is disabled.", e)
+                Log.e(TAG, "Native library not available in this build.", e)
                 _state.value = LlamaState.Error(
-                    RuntimeException("Native library not available. On-device inference requires NDK build with llama.cpp submodule.")
+                    RuntimeException("Native library not available: ${e.message}")
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load native library", e)
