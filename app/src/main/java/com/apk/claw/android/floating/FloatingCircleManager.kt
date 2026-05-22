@@ -276,6 +276,24 @@ object FloatingCircleManager {
             }
         }
 
+        // "屏幕流" option
+        popupView.findViewById<TextView>(R.id.tvMenuScreenStream)?.setOnClickListener {
+            dismissPopupMenu()
+            try {
+                val app = appRef ?: ClawApplication.instance
+                val intent = android.content.Intent(
+                    app,
+                    com.apk.claw.android.ui.camera.ScreenStreamActivity::class.java
+                ).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or
+                            android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                app.startActivity(intent)
+            } catch (e: Exception) {
+                XLog.e(TAG, "Error opening screen stream", e)
+            }
+        }
+
         // "视频流" option
         popupView.findViewById<TextView>(R.id.tvMenuVideoStream)?.setOnClickListener {
             dismissPopupMenu()

@@ -34,8 +34,8 @@ android {
         applicationId = "com.apk.claw.android"
         minSdk = 28
         targetSdk = 36
-        versionCode = 50
-        versionName = "0.0.50"
+        versionCode = 51
+        versionName = "0.0.51"
         buildConfigField("String", "VERSION_INFO", getVersionGit())
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -43,17 +43,18 @@ android {
             abiFilters.add("arm64-v8a")
         }
 
-        externalNativeBuild {
-            cmake {
-                arguments += "-DCMAKE_BUILD_TYPE=Release"
-                arguments += "-DBUILD_SHARED_LIBS=ON"
-                arguments += "-DLLAMA_BUILD_COMMON=ON"
-                arguments += "-DLLAMA_OPENSSL=OFF"
-                arguments += "-DGGML_NATIVE=OFF"
-                arguments += "-DGGML_LLAMAFILE=ON"
-                arguments += "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16"
-            }
-        }
+        // externalNativeBuild disabled — using prebuilt .so in jniLibs
+        // externalNativeBuild {
+        //     cmake {
+        //         arguments += "-DCMAKE_BUILD_TYPE=Release"
+        //         arguments += "-DBUILD_SHARED_LIBS=ON"
+        //         arguments += "-DLLAMA_BUILD_COMMON=ON"
+        //         arguments += "-DLLAMA_OPENSSL=OFF"
+        //         arguments += "-DGGML_NATIVE=OFF"
+        //         arguments += "-DGGML_LLAMAFILE=ON"
+        //         arguments += "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16"
+        //     }
+        // }
     }
 
 
@@ -92,12 +93,13 @@ android {
         buildConfig = true
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
+    // externalNativeBuild disabled — using prebuilt .so in jniLibs
+    // externalNativeBuild {
+    //     cmake {
+    //         path = file("src/main/cpp/CMakeLists.txt")
+    //         version = "3.22.1"
+    //     }
+    // }
 
     packaging {
         resources {

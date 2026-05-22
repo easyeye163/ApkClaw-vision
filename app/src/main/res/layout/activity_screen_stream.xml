@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:background="#ff000000" android:layout_width="fill_parent" android:layout_height="fill_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <TextView
+        android:id="@+id/tv_screen_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="正在启动屏幕捕获..."
+        android:textColor="#80FFFFFF"
+        android:textSize="16sp" />
+
+    <LinearLayout
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:background="#66000000"
+        android:padding="12.0dip"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical">
+
+        <ImageButton
+            android:id="@+id/btn_close_screen"
+            android:background="?selectableItemBackgroundBorderless"
+            android:padding="4.0dip"
+            android:layout_width="36.0dip"
+            android:layout_height="36.0dip"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="#ffffffff"
+            android:contentDescription="关闭" />
+
+        <TextView
+            android:id="@+id/tv_monitor_status"
+            android:textSize="12.0sp"
+            android:textColor="#ffff9800"
+            android:visibility="gone"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12.0dip" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:background="#66000000"
+        android:padding="16.0dip"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btn_toggle_monitor"
+            android:textSize="12.0sp"
+            android:textColor="#ffffffff"
+            android:layout_width="wrap_content"
+            android:layout_height="40.0dip"
+            android:text="开始监控"
+            android:layout_marginEnd="12.0dip"
+            android:backgroundTint="#33ffffff" />
+
+        <Button
+            android:id="@+id/btn_voice_float"
+            android:textSize="12.0sp"
+            android:textColor="#ffffffff"
+            android:layout_width="wrap_content"
+            android:layout_height="40.0dip"
+            android:text="语音助手"
+            android:backgroundTint="#331e88e5" />
+    </LinearLayout>
+
+</FrameLayout>

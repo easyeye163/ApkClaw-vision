@@ -478,6 +478,7 @@
     <string name="chat_cloud_mode">云端模式</string>
 
     <!-- Floating Menu Video Stream -->
+    <string name="floating_menu_screen_stream">屏幕流</string>
     <string name="floating_menu_video_stream">视频流</string>
     <string name="floating_menu_voice_float">语音悬浮框</string>
 
