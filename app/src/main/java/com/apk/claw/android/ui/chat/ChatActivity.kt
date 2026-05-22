@@ -969,8 +969,44 @@ class ChatActivity : BaseActivity() {
      */
     private fun speakAnswer(text: String) {
         if (ttsEnabled && ttsManager != null) {
-            ttsManager?.speak(text)
+            ttsManager?.speak(stripMarkdownForTts(text))
         }
+    }
+
+    /**
+     * 去除 Markdown 格式标记，保留纯文本供 TTS 朗读。
+     * 例如：**加粗** → 加粗，~~删除线~~ → 删除线，# 标题 → 标题
+     */
+    private fun stripMarkdownForTts(text: String): String {
+        return text
+            // 去除代码块
+            .replace(Regex("```[\\s\\S]*?```"), "")
+            // 去除行内代码
+            .replace(Regex("`[^`]+`"), "")
+            // 去除图片 ![alt](url) → 保留 alt
+            .replace(Regex("!\\[([^]]*)]\\([^)]*\\)"), "$1")
+            // 去除链接 [text](url) → 保留 text
+            .replace(Regex("\\[([^]]*)]\\([^)]*\\)"), "$1")
+            // 去除加粗 **text** 或 __text__ → text
+            .replace(Regex("\\*\\*([^*]+)\\*\\*|__([^_]+)__"), "$1$2")
+            // 去除斜体 *text* 或 _text_ → text（注意不匹配已去除的加粗）
+            .replace(Regex("(?<!\\*)\\*([^*]+)\\*(?!\\*)|(?<!_)_([^_]+)_(?!_)"), "$1$2")
+            // 去除删除线 ~~text~~ → text
+            .replace(Regex("~~([^~]+)~~"), "$1")
+            // 去除标题标记 # ## ### 等
+            .replace(Regex("^#{1,6}\\s+"), "")
+            // 去除引用 >
+            .replace(Regex("(?m)^>\\s+"), "")
+            // 去除无序列表标记
+            .replace(Regex("(?m)^[-*+]\\s+"), "")
+            // 去除有序列表标记
+            .replace(Regex("(?m)^\\d+\\.\\s+"), "")
+            // 去除分隔线
+            .replace(Regex("^---+$"), "")
+            .replace(Regex("^\\*\\*\\*+$"), "")
+            // 清理多余空行（保留单换行）
+            .replace(Regex("\n{3,}"), "\n\n")
+            .trim()
     }
 
     /**
