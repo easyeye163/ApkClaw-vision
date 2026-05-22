@@ -248,6 +248,14 @@ class ChatActivity : BaseActivity() {
         }
     }
 
+    override fun onNewIntent(intent: android.content.Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        voiceFloatTextHandled = false
+        handleScreenshotIntent()
+        handleVoiceFloatIntent()
+    }
+
     override fun onStart() {
         super.onStart()
         // 云端模式下建立长连接以接收推送
