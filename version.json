@@ -1,1 +1,1 @@
-{"versionCode":56,"versionName":"v0.0.56","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.56/ApkClaw_v0.0.56_debug.apk","releaseNotes":"本地模型加载增加对话框反馈和错误弹窗","releaseDate":"2026-05-22","fileSize":72207870}
+{"versionCode":57,"versionName":"v0.0.57","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.57/ApkClaw_v0.0.57_debug.apk","releaseNotes":"修复多模态模型mmproj下载失败静默忽略的bug","releaseDate":"2026-05-22","fileSize":72208838}
