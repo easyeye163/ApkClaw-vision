@@ -234,6 +234,55 @@ object VoiceInteractionFloatWindow {
 
     fun isShowing(): Boolean = EasyFloat.isShow(FLOAT_TAG)
 
+    /**
+     * 显示监控检测结果（供 ScreenStreamActivity / CameraStreamActivity 调用）
+     * 与 showMessage 不同，监控消息不会快速清除，会追加显示
+     */
+    fun showMonitorResult(message: String) {
+        mainHandler.post {
+            if (!EasyFloat.isShow(FLOAT_TAG)) {
+                // 悬浮窗未显示时用 Toast 兜底
+                appRef?.let {
+                    Toast.makeText(it, message, Toast.LENGTH_LONG).show()
+                }
+                return@post
+            }
+
+            resultsList.add(message)
+            if (resultsList.size > 20) resultsList.removeAt(0)
+            resultAdapter?.setItems(resultsList)
+            resultsRecyclerView?.visibility = View.VISIBLE
+
+            // 同时在消息区域显示最新一条
+            messageTextView?.text = message
+            messageTextView?.visibility = View.VISIBLE
+
+            // 更新状态显示轮次
+            updateStatus("监控检测 (${resultsList.size})")
+
+            // 监控消息 60 秒后自动清除消息文本（列表保留）
+            messageClearRunnable?.let { mainHandler.removeCallbacks(it) }
+            messageClearRunnable = Runnable {
+                messageTextView?.text = ""
+                messageTextView?.visibility = View.INVISIBLE
+            }
+            mainHandler.postDelayed(messageClearRunnable!!, 60000L)
+        }
+    }
+
+    /**
+     * 清除监控结果列表
+     */
+    fun clearMonitorResults() {
+        mainHandler.post {
+            resultsList.clear()
+            resultAdapter?.setItems(resultsList)
+            resultsRecyclerView?.visibility = View.GONE
+            messageTextView?.text = ""
+            messageTextView?.visibility = View.INVISIBLE
+        }
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun bindViews(root: View) {
         statusTextView = root.findViewById(R.id.tv_voice_status)

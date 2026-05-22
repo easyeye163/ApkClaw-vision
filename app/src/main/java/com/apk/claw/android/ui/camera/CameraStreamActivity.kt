@@ -14,7 +14,6 @@ import androidx.core.content.ContextCompat
 import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
-import com.apk.claw.android.floating.voice.VoiceStreamFloatWindow
 import com.apk.claw.android.service.monitor.StreamMonitorController
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
@@ -188,22 +187,17 @@ class CameraStreamActivity : AppCompatActivity() {
         btnVoiceFloat.setOnClickListener {
             if (VoiceInteractionFloatWindow.isShowing()) {
                 VoiceInteractionFloatWindow.dismiss()
-                VoiceStreamFloatWindow.dismiss()
                 btnVoiceFloat.text = "语音助手"
             } else {
-                VoiceStreamFloatWindow.show(application as ClawApplication)
                 VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
-                    // 在悬浮窗内展示用户语音
                     showResultMessage("你: $text")
 
-                    // 如果正在监控，语音介入：更新监控提示词
                     if (isMonitoring) {
                         monitorPrompt = text
                         showResultMessage("助手: 已更新监控任务: $text")
                         XLog.i(TAG, "Monitor prompt updated by voice: $text")
                     }
 
-                    // 发送到 LLM（带当前画面）
                     sendToLlmWithFrame(text)
                 }
                 VoiceInteractionFloatWindow.show(application as ClawApplication)
@@ -219,9 +213,7 @@ class CameraStreamActivity : AppCompatActivity() {
     private fun startMonitoring() {
         if (isMonitoring) return
 
-        // 确保语音悬浮窗已打开
         if (!VoiceInteractionFloatWindow.isShowing()) {
-            VoiceStreamFloatWindow.show(application as ClawApplication)
             VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
                 showResultMessage("你: $text")
                 monitorPrompt = text
@@ -308,11 +300,8 @@ class CameraStreamActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 在 VoiceStreamFloatWindow 悬浮窗中展示对话结果
-     */
     private fun showResultMessage(text: String) {
-        VoiceStreamFloatWindow.showMonitorResult(text)
+        VoiceInteractionFloatWindow.showMonitorResult(text)
     }
 
     /**
@@ -517,8 +506,8 @@ class CameraStreamActivity : AppCompatActivity() {
         if (isMonitoring) {
             stopMonitoring()
         }
+        VoiceInteractionFloatWindow.clearMonitorResults()
         VoiceInteractionFloatWindow.dismiss()
-        VoiceStreamFloatWindow.dismiss()
         ttsManager?.shutdown()
         ttsManager = null
         cameraFramePusher?.stop()

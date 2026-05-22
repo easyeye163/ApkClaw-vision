@@ -15,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
-import com.apk.claw.android.floating.voice.VoiceStreamFloatWindow
 import com.apk.claw.android.service.ScreenCaptureService
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
@@ -170,10 +169,8 @@ class ScreenStreamActivity : AppCompatActivity() {
         btnVoiceFloat.setOnClickListener {
             if (VoiceInteractionFloatWindow.isShowing()) {
                 VoiceInteractionFloatWindow.dismiss()
-                VoiceStreamFloatWindow.dismiss()
                 btnVoiceFloat.text = "语音助手"
             } else {
-                VoiceStreamFloatWindow.show(application as ClawApplication)
                 VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
                     showResultMessage("你: $text")
 
@@ -198,7 +195,6 @@ class ScreenStreamActivity : AppCompatActivity() {
         if (isMonitoring) return
 
         if (!VoiceInteractionFloatWindow.isShowing()) {
-            VoiceStreamFloatWindow.show(application as ClawApplication)
             VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
                 showResultMessage("你: $text")
                 monitorPrompt = text
@@ -277,7 +273,7 @@ class ScreenStreamActivity : AppCompatActivity() {
     }
 
     private fun showResultMessage(text: String) {
-        VoiceStreamFloatWindow.showMonitorResult(text)
+        VoiceInteractionFloatWindow.showMonitorResult(text)
     }
 
     private fun sendToLlmWithFrame(userText: String) {
@@ -452,8 +448,8 @@ class ScreenStreamActivity : AppCompatActivity() {
         }
         waitScope?.cancel()
         waitScope = null
+        VoiceInteractionFloatWindow.clearMonitorResults()
         VoiceInteractionFloatWindow.dismiss()
-        VoiceStreamFloatWindow.dismiss()
         ttsManager?.shutdown()
         ttsManager = null
 
