@@ -176,8 +176,11 @@ class LocalModelConfigActivity : BaseActivity() {
     private fun updateUI() {
         val modelDir = File(modelsBaseDir, selectedModel.id)
         val ggufFile = File(modelDir, selectedModel.ggufFileName)
-        val isDownloaded = ggufFile.exists()
-        val downloadedSize = ggufFile.length()
+        val mmprojFile = selectedModel.mmprojFileName?.let { File(modelDir, it) }
+        val isGgufOk = ggufFile.exists()
+        val isMmprojOk = mmprojFile == null || mmprojFile.exists()
+        val isDownloaded = isGgufOk && isMmprojOk
+        val downloadedSize = ggufFile.length() + (if (mmprojFile?.exists() == true) mmprojFile.length() else 0L)
 
         // Update status text
         when {
@@ -284,12 +287,23 @@ class LocalModelConfigActivity : BaseActivity() {
 
         downloadSingleFile(ggufFileName, modelDir, ggufUrls)
 
+        // 验证 GGUF 文件已下载
+        val ggufFile = File(modelDir, ggufFileName)
+        if (!ggufFile.exists()) {
+            throw RuntimeException(getString(R.string.local_model_download_failed))
+        }
+
         val mmprojFileName = selectedModel.mmprojFileName
         if (mmprojFileName != null) {
             val mmprojFile = File(modelDir, mmprojFileName)
             if (!mmprojFile.exists()) {
                 val mmprojUrls = buildMmprojUrls()
                 downloadSingleFile(mmprojFileName, modelDir, mmprojUrls)
+
+                // 验证 mmproj 文件已下载
+                if (!mmprojFile.exists()) {
+                    throw RuntimeException(getString(R.string.local_model_mmproj_download_failed))
+                }
             }
         }
     }
@@ -378,14 +392,8 @@ class LocalModelConfigActivity : BaseActivity() {
             }
         }
 
-        // All URLs failed
-        withContext(Dispatchers.Main) {
-            Toast.makeText(
-                this@LocalModelConfigActivity,
-                getString(R.string.local_model_all_sources_failed, fileName),
-                Toast.LENGTH_LONG
-            ).show()
-        }
+        // All URLs failed — throw so caller knows
+        throw RuntimeException(getString(R.string.local_model_all_sources_failed, fileName))
     }
 
     private fun buildGgufUrls(): List<String> {
@@ -442,8 +450,15 @@ class LocalModelConfigActivity : BaseActivity() {
     private fun loadModel() {
         val modelDir = File(modelsBaseDir, selectedModel.id)
         val ggufFile = File(modelDir, selectedModel.ggufFileName)
+        val mmprojFile = selectedModel.mmprojFileName?.let { File(modelDir, it) }
+
         if (!ggufFile.exists()) {
             Toast.makeText(this, getString(R.string.local_model_please_download), Toast.LENGTH_LONG).show()
+            return
+        }
+        // 多模态模型需要 mmproj 文件
+        if (selectedModel.mmprojFileName != null && (mmprojFile == null || !mmprojFile.exists())) {
+            Toast.makeText(this, getString(R.string.local_model_mmproj_missing), Toast.LENGTH_LONG).show()
             return
         }
         btnLoadModel.isEnabled = false

@@ -526,4 +526,6 @@
     <string name="local_model_loading_model">正在加载 %s …</string>
     <string name="local_model_load_timeout">模型加载超时（120秒），可能模型文件过大或设备内存不足</string>
     <string name="local_model_load_fail_title">模型加载失败</string>
+    <string name="local_model_mmproj_download_failed">多模态投影文件(mmproj)下载失败，请检查网络后重新下载</string>
+    <string name="local_model_mmproj_missing">缺少多模态投影文件(mmproj)，请重新下载模型</string>
 </resources>
