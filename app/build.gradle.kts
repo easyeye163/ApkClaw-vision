@@ -34,8 +34,8 @@ android {
         applicationId = "com.apk.claw.android"
         minSdk = 28
         targetSdk = 36
-        versionCode = 53
-        versionName = "0.0.53"
+        versionCode = 54
+        versionName = "0.0.54"
         buildConfigField("String", "VERSION_INFO", getVersionGit())
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

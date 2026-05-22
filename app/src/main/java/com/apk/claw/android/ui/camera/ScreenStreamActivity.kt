@@ -1,9 +1,6 @@
 package com.apk.claw.android.ui.camera
 
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.media.projection.MediaProjectionManager
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Base64
 import android.view.View
@@ -15,7 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
-import com.apk.claw.android.service.ScreenCaptureService
+import com.apk.claw.android.service.ClawAccessibilityService
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import com.apk.claw.android.vision.VisionFrameBuffer
@@ -30,19 +27,23 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.ByteArrayOutputStream
 
 /**
  * 屏幕流 Activity
  *
- * 功能与 CameraStreamActivity 完全一致，只是输入源从摄像头改为屏幕捕获。
- * 支持自动监控循环、语音介入更新任务、TTS 语音播报。
+ * 使用无障碍服务截图功能捕获屏幕画面，发送到 LLM Vision API 进行分析。
+ * 支持：
+ * - 自动监控循环（每5秒截图→发LLM→TTS播报）
+ * - 语音介入更新监控任务
+ * - 不需要 MediaProjection 权限，不会显示"共享中"
  */
 class ScreenStreamActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "ScreenStreamActivity"
-        private const val REQUEST_MEDIA_PROJECTION = 2001
         private const val MONITOR_INTERVAL_MS = 5000L
+        private const val SCREENSHOT_TIMEOUT_MS = 5000L
     }
 
     private lateinit var tvStatus: TextView
@@ -53,9 +54,6 @@ class ScreenStreamActivity : AppCompatActivity() {
 
     private var ttsManager: com.apk.claw.android.floating.voice.TtsManager? = null
     private var isMonitoring = false
-
-    // 等待服务启动
-    private var waitScope: CoroutineScope? = null
 
     // 自动监控循环
     private var monitorScope: CoroutineScope? = null
@@ -80,7 +78,7 @@ class ScreenStreamActivity : AppCompatActivity() {
         btnCloseScreen = findViewById(R.id.btn_close_screen)
 
         bindButtons()
-        requestScreenCapture()
+        checkAccessibilityService()
     }
 
     private fun setupFullscreen() {
@@ -99,57 +97,17 @@ class ScreenStreamActivity : AppCompatActivity() {
     }
 
     /**
-     * 请求屏幕录制权限
+     * 检查无障碍服务是否已开启
      */
-    private fun requestScreenCapture() {
-        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_MEDIA_PROJECTION)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_MEDIA_PROJECTION) {
-            if (resultCode == Activity.RESULT_OK && data != null) {
-                startScreenCapture(resultCode, data)
-            } else {
-                Toast.makeText(this, "需要屏幕录制权限才能使用屏幕流", Toast.LENGTH_SHORT).show()
-                finish()
-            }
-        }
-    }
-
-    private fun startScreenCapture(resultCode: Int, data: Intent) {
-        try {
-            // Android 14+ 要求 MediaProjection 必须在 mediaProjection 类型的前台服务中运行
-            ScreenCaptureService.start(this, resultCode, data)
-
-            tvStatus.text = "屏幕流启动中..."
-            XLog.i(TAG, "ScreenCaptureService started")
-
-            // 等待服务启动完成，轮询检查 VisionFrameBuffer 是否有帧
-            waitScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-            waitScope?.launch {
-                var waited = 0
-                val maxWaitMs = 10000L
-                while (waited < maxWaitMs) {
-                    if (ScreenCaptureService.isRunning) {
-                        withContext(Dispatchers.Main) {
-                            tvStatus.text = "屏幕流已启动"
-                        }
-                        XLog.i(TAG, "Screen capture service is running")
-                        return@launch
-                    }
-                    delay(500)
-                    waited += 500
-                }
-                withContext(Dispatchers.Main) {
-                    tvStatus.text = "屏幕捕获启动超时，请重试"
-                }
-                XLog.e(TAG, "Screen capture service failed to start within ${maxWaitMs}ms")
-            }
-        } catch (e: Exception) {
-            XLog.e(TAG, "Failed to start screen capture", e)
-            tvStatus.text = "屏幕捕获启动失败: ${e.message}"
+    private fun checkAccessibilityService() {
+        val a11yService = ClawAccessibilityService.getInstance()
+        if (a11yService != null) {
+            tvStatus.text = "屏幕监控就绪（无障碍截图）"
+            XLog.i(TAG, "Accessibility service available, screen monitoring ready")
+        } else {
+            tvStatus.text = "⚠️ 请先开启无障碍服务"
+            XLog.w(TAG, "Accessibility service not running, screen monitoring unavailable")
+            Toast.makeText(this, "屏幕监控需要无障碍服务，请先在设置中开启", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -189,10 +147,59 @@ class ScreenStreamActivity : AppCompatActivity() {
     }
 
     /**
+     * 使用无障碍服务截取当前屏幕
+     * @return JPEG 字节数组，失败返回 null
+     */
+    private fun captureScreenJpeg(): ByteArray? {
+        val a11yService = ClawAccessibilityService.getInstance()
+        if (a11yService == null) {
+            XLog.w(TAG, "Accessibility service not available for screenshot")
+            return null
+        }
+
+        try {
+            val bitmap = a11yService.takeScreenshot(SCREENSHOT_TIMEOUT_MS) ?: run {
+                XLog.w(TAG, "Screenshot returned null")
+                return null
+            }
+
+            // 缩小图片以减少发送大小（最大宽度720px）
+            val scaledBitmap = if (bitmap.width > 720) {
+                val scale = 720f / bitmap.width
+                Bitmap.createScaledBitmap(bitmap, 720, (bitmap.height * scale).toInt(), true)
+            } else {
+                bitmap
+            }
+
+            val stream = ByteArrayOutputStream()
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 70, stream)
+            val jpegBytes = stream.toByteArray()
+
+            // 回收 bitmap
+            if (scaledBitmap != bitmap) {
+                scaledBitmap.recycle()
+            }
+            bitmap.recycle()
+
+            XLog.i(TAG, "Screen captured: ${jpegBytes.size / 1024}KB")
+            return jpegBytes
+        } catch (e: Exception) {
+            XLog.e(TAG, "Failed to capture screen", e)
+            return null
+        }
+    }
+
+    /**
      * 开始监控：启动自动循环
      */
     private fun startMonitoring() {
         if (isMonitoring) return
+
+        val a11yService = ClawAccessibilityService.getInstance()
+        if (a11yService == null) {
+            Toast.makeText(this, "屏幕监控需要无障碍服务，请先开启", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         if (!VoiceInteractionFloatWindow.isShowing()) {
             VoiceInteractionFloatWindow.onVoiceResultCallback = { text ->
@@ -246,19 +253,24 @@ class ScreenStreamActivity : AppCompatActivity() {
     }
 
     private suspend fun sendMonitorFrame() {
-        val frameEntry = VisionFrameBuffer.latestFrame
-        if (frameEntry == null) {
-            XLog.w(TAG, "Monitor round $monitorRound: no frame available, skip")
+        // 使用无障碍截图获取当前屏幕
+        val jpegBytes = withContext(Dispatchers.IO) {
+            captureScreenJpeg()
+        }
+
+        if (jpegBytes == null) {
+            XLog.w(TAG, "Monitor round $monitorRound: screenshot failed, skip")
+            showResultMessage("[${monitorRound}] 截图失败，跳过本轮")
             return
         }
 
         val currentPrompt = monitorPrompt
-        XLog.i(TAG, "Monitor round $monitorRound: analyzing screen frame, prompt=$currentPrompt")
+        XLog.i(TAG, "Monitor round $monitorRound: analyzing screen (${jpegBytes.size / 1024}KB), prompt=$currentPrompt")
 
         val reply = callLlmVision(
             systemPrompt = "你是一个屏幕监控助手。用户会给你屏幕画面和监控任务。请根据任务要求分析屏幕内容，用简洁的语言描述你看到的情况。如果检测到用户关注的内容或变化，请明确提醒。",
             userText = currentPrompt,
-            frameJpegBytes = frameEntry.jpegBytes
+            frameJpegBytes = jpegBytes
         )
 
         if (reply != null) {
@@ -279,13 +291,26 @@ class ScreenStreamActivity : AppCompatActivity() {
     private fun sendToLlmWithFrame(userText: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val frameEntry = VisionFrameBuffer.latestFrame
-                if (frameEntry != null) {
+                // 先隐藏悬浮窗避免截图包含悬浮窗内容
+                val floatView = com.lzf.easyfloat.EasyFloat.getFloatView("voice_interaction_float")
+                floatView?.visibility = View.GONE
+
+                // 等待 UI 刷新
+                kotlinx.coroutines.delay(300)
+
+                val jpegBytes = captureScreenJpeg()
+
+                // 恢复悬浮窗
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    floatView?.visibility = View.VISIBLE
+                }
+
+                if (jpegBytes != null) {
                     showResultMessage("助手: 思考中（含屏幕分析）...")
                     val reply = callLlmVision(
                         systemPrompt = "你是一个简洁有用的语音助手。用户会给你语音内容和屏幕画面，请结合两者回答。用简短的语言回答。",
                         userText = userText,
-                        frameJpegBytes = frameEntry.jpegBytes
+                        frameJpegBytes = jpegBytes
                     )
                     if (reply != null) {
                         showResultMessage("助手: $reply")
@@ -294,7 +319,7 @@ class ScreenStreamActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    showResultMessage("助手: 思考中...")
+                    showResultMessage("助手: 截图失败，仅文本回复...")
                     val reply = callLlmTextOnly(userText)
                     if (reply != null) {
                         showResultMessage("助手: $reply")
@@ -446,16 +471,9 @@ class ScreenStreamActivity : AppCompatActivity() {
         if (isMonitoring) {
             stopMonitoring()
         }
-        waitScope?.cancel()
-        waitScope = null
         VoiceInteractionFloatWindow.clearMonitorResults()
         VoiceInteractionFloatWindow.dismiss()
         ttsManager?.shutdown()
         ttsManager = null
-
-        // 停止屏幕捕获服务
-        if (ScreenCaptureService.isRunning) {
-            ScreenCaptureService.stop(this)
-        }
     }
 }
