@@ -1,1 +1,1 @@
-{"versionCode":54,"versionName":"v0.0.54","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.54/ApkClaw_v0.0.54.apk","releaseNotes":"屏幕监控改用无障碍截图，移除MediaProjection依赖","releaseDate":"2026-05-22"}
+{"versionCode":56,"versionName":"v0.0.56","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.56/ApkClaw_v0.0.56_debug.apk","releaseNotes":"本地模型加载增加对话框反馈和错误弹窗","releaseDate":"2026-05-22","fileSize":72207870}
