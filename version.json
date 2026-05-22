@@ -1,1 +1,1 @@
-{"versionCode":51,"versionName":"v0.0.51","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.51/ApkClaw_v0.0.51.apk","releaseNotes":"新增屏幕流功能","releaseDate":"2026-05-22"}
+{"versionCode":52,"versionName":"v0.0.52","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.52/ApkClaw_v0.0.52.apk","releaseNotes":"修复屏幕捕获 MediaProjection 前台服务限制（Android 14+ 兼容）","releaseDate":"2026-05-22"}
