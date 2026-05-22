@@ -1,1 +1,1 @@
-{"versionCode":53,"versionName":"v0.0.53","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.53/ApkClaw_v0.0.53.apk","releaseNotes":"修复监控悬浮框无输出（两个悬浮窗重叠遮挡）","releaseDate":"2026-05-22"}
+{"versionCode":54,"versionName":"v0.0.54","downloadUrl":"https://github.com/easyeye163/ApkClaw-vision/releases/download/v0.0.54/ApkClaw_v0.0.54.apk","releaseNotes":"屏幕监控改用无障碍截图，移除MediaProjection依赖","releaseDate":"2026-05-22"}
