@@ -16,9 +16,9 @@ import com.apk.claw.android.ClawApplication
 import com.apk.claw.android.R
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
 import com.apk.claw.android.floating.voice.VoiceStreamFloatWindow
+import com.apk.claw.android.service.ScreenCaptureService
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
-import com.apk.claw.android.vision.ScreenCapturePusher
 import com.apk.claw.android.vision.VisionFrameBuffer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,8 +53,10 @@ class ScreenStreamActivity : AppCompatActivity() {
     private lateinit var btnCloseScreen: ImageButton
 
     private var ttsManager: com.apk.claw.android.floating.voice.TtsManager? = null
-    private var screenCapturePusher: ScreenCapturePusher? = null
     private var isMonitoring = false
+
+    // 等待服务启动
+    private var waitScope: CoroutineScope? = null
 
     // 自动监控循环
     private var monitorScope: CoroutineScope? = null
@@ -119,22 +121,33 @@ class ScreenStreamActivity : AppCompatActivity() {
 
     private fun startScreenCapture(resultCode: Int, data: Intent) {
         try {
-            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            val mediaProjection = projectionManager.getMediaProjection(resultCode, data) ?: run {
-                Toast.makeText(this, "获取屏幕录制权限失败", Toast.LENGTH_SHORT).show()
-                finish()
-                return
+            // Android 14+ 要求 MediaProjection 必须在 mediaProjection 类型的前台服务中运行
+            ScreenCaptureService.start(this, resultCode, data)
+
+            tvStatus.text = "屏幕流启动中..."
+            XLog.i(TAG, "ScreenCaptureService started")
+
+            // 等待服务启动完成，轮询检查 VisionFrameBuffer 是否有帧
+            waitScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+            waitScope?.launch {
+                var waited = 0
+                val maxWaitMs = 10000L
+                while (waited < maxWaitMs) {
+                    if (ScreenCaptureService.isRunning) {
+                        withContext(Dispatchers.Main) {
+                            tvStatus.text = "屏幕流已启动"
+                        }
+                        XLog.i(TAG, "Screen capture service is running")
+                        return@launch
+                    }
+                    delay(500)
+                    waited += 500
+                }
+                withContext(Dispatchers.Main) {
+                    tvStatus.text = "屏幕捕获启动超时，请重试"
+                }
+                XLog.e(TAG, "Screen capture service failed to start within ${maxWaitMs}ms")
             }
-
-            VisionFrameBuffer.start()
-
-            val pusher = ScreenCapturePusher(mediaProjection)
-            pusher.fps = 2
-            pusher.start(windowManager)
-            screenCapturePusher = pusher
-
-            tvStatus.text = "屏幕流已启动"
-            XLog.i(TAG, "Screen capture started")
         } catch (e: Exception) {
             XLog.e(TAG, "Failed to start screen capture", e)
             tvStatus.text = "屏幕捕获启动失败: ${e.message}"
@@ -437,12 +450,16 @@ class ScreenStreamActivity : AppCompatActivity() {
         if (isMonitoring) {
             stopMonitoring()
         }
+        waitScope?.cancel()
+        waitScope = null
         VoiceInteractionFloatWindow.dismiss()
         VoiceStreamFloatWindow.dismiss()
         ttsManager?.shutdown()
         ttsManager = null
-        screenCapturePusher?.stop()
-        screenCapturePusher = null
-        VisionFrameBuffer.stop()
+
+        // 停止屏幕捕获服务
+        if (ScreenCaptureService.isRunning) {
+            ScreenCaptureService.stop(this)
+        }
     }
 }
