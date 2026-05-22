@@ -487,10 +487,29 @@ class CameraStreamActivity : AppCompatActivity() {
             if (ttsManager == null) {
                 ttsManager = com.apk.claw.android.floating.voice.TtsManager(application)
             }
-            ttsManager?.speak(text)
+            ttsManager?.speak(stripMarkdownForTts(text))
         } catch (e: Exception) {
             XLog.e(TAG, "TTS speak failed", e)
         }
+    }
+
+    private fun stripMarkdownForTts(text: String): String {
+        return text
+            .replace(Regex("```[\\s\\S]*?```"), "")
+            .replace(Regex("`[^`]+`"), "")
+            .replace(Regex("!\\[([^]]*)]\\([^)]*\\)"), "$1")
+            .replace(Regex("\\[([^]]*)]\\([^)]*\\)"), "$1")
+            .replace(Regex("\\*\\*([^*]+)\\*\\*|__([^_]+)__"), "$1$2")
+            .replace(Regex("(?<!\\*)\\*([^*]+)\\*(?!\\*)|(?<!_)_([^_]+)_(?!_)"), "$1$2")
+            .replace(Regex("~~([^~]+)~~"), "$1")
+            .replace(Regex("^#{1,6}\\s+"), "")
+            .replace(Regex("(?m)^>\\s+"), "")
+            .replace(Regex("(?m)^[-*+]\\s+"), "")
+            .replace(Regex("(?m)^\\d+\\.\\s+"), "")
+            .replace(Regex("^---+$"), "")
+            .replace(Regex("^\\*\\*\\*+$"), "")
+            .replace(Regex("\n{3,}"), "\n\n")
+            .trim()
     }
 
     override fun onResume() {
