@@ -229,6 +229,8 @@ class ChatActivity : BaseActivity() {
             .build())
         rvMessages.adapter = adapter
         rvMessages.layoutManager = LinearLayoutManager(this)
+        // 禁用 ItemAnimator 防止流式输出时每个 token 触发淡入淡出动画导致闪烁
+        rvMessages.itemAnimator = null
 
         loadChatHistory()
 
@@ -864,32 +866,27 @@ class ChatActivity : BaseActivity() {
         val sb = StringBuilder()
         lifecycleScope.launch {
             try {
+                // 50ms 节流：高速 token 累积后批量刷新 UI，避免逐 token 刷新导致闪烁
+                var lastUpdateTime = 0L
+                val throttleMs = 50L
+
                 engine.sendUserPrompt(text).collect { token ->
                     sb.append(token)
-                    runOnUiThread {
-                        if (adapter.getMessages().lastOrNull()?.isThinking == true) {
-                            adapter.updateLastMessage(sb.toString())
-                        } else {
-                            adapter.addMessage(ChatMessage(
-                                text = sb.toString(),
-                                isUser = false,
-                                timestamp = System.currentTimeMillis()
-                            ))
+                    val now = System.currentTimeMillis()
+                    if (now - lastUpdateTime >= throttleMs) {
+                        lastUpdateTime = now
+                        runOnUiThread {
+                            // 流式输出时实时过滤  分析过程，用户不会看到思考内容
+                            val display = stripThinkTags(sb.toString())
+                            adapter.updateLastMessage(display.ifEmpty { getString(R.string.chat_local_model_generating) })
+                            rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
                         }
-                        rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
                     }
                 }
+                // 流式完成：确保最终状态刷新并保存
                 runOnUiThread {
-                    val answer = sb.toString()
-                    if (adapter.getMessages().lastOrNull()?.isThinking == true) {
-                        adapter.updateLastMessage(answer)
-                    } else {
-                        adapter.addMessage(ChatMessage(
-                            text = answer,
-                            isUser = false,
-                            timestamp = System.currentTimeMillis()
-                        ))
-                    }
+                    val answer = stripThinkTags(sb.toString())
+                    adapter.updateLastMessage(answer.ifEmpty { getString(R.string.chat_local_model_generating) })
                     rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
                     persistChatHistory()
                     speakAnswer(answer)
@@ -897,11 +894,7 @@ class ChatActivity : BaseActivity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     val errorMsg = getString(R.string.chat_local_model_error, e.message ?: "Unknown")
-                    adapter.addMessage(ChatMessage(
-                        text = errorMsg,
-                        isUser = false,
-                        timestamp = System.currentTimeMillis()
-                    ))
+                    adapter.updateLastMessage(errorMsg)
                     rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
                     persistChatHistory()
                 }
@@ -962,6 +955,28 @@ class ChatActivity : BaseActivity() {
                 }
             }
         })
+    }
+
+    /**
+     * 过滤 <think>...</think> 标签及其内容（某些模型如 DeepSeek 会输出思考过程）
+     * 支持流式中间态：当 </think> 尚未到达时，截断未闭合的 <think 块
+     */
+    private fun stripThinkTags(text: String): String {
+        var result = text
+        while (true) {
+            val start = result.indexOf("<think")
+            if (start < 0) break
+            val end = result.indexOf("</think", start)
+            if (end >= 0) {
+                val close = result.indexOf(">", end + 7)
+                result = if (close >= 0) result.removeRange(start, close + 1) else result.removeRange(start, result.length)
+            } else {
+                // 流式中间态：</think> 尚未到达，截断 <think 及其之后的所有内容
+                result = result.removeRange(start, result.length)
+                break
+            }
+        }
+        return result.trim()
     }
 
     /**

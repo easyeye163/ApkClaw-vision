@@ -392,7 +392,7 @@ class ScreenStreamActivity : AppCompatActivity() {
             engine.sendUserPrompt(userText, 300).collect { token ->
                 resultBuilder.append(token)
             }
-            resultBuilder.toString().trim().ifEmpty { null }
+            stripThinkTags(resultBuilder.toString().trim()).ifEmpty { null }
         } catch (e: Exception) {
             XLog.w(TAG, "Local model vision failed, fallback to HTTP", e)
             null
@@ -416,7 +416,7 @@ class ScreenStreamActivity : AppCompatActivity() {
             engine.sendUserPrompt(userText, 300).collect { token ->
                 resultBuilder.append(token)
             }
-            resultBuilder.toString().trim().ifEmpty { null }
+            stripThinkTags(resultBuilder.toString().trim()).ifEmpty { null }
         } catch (e: Exception) {
             XLog.w(TAG, "Local model text failed, fallback to HTTP", e)
             null
@@ -527,7 +527,7 @@ class ScreenStreamActivity : AppCompatActivity() {
             val content = jsonResp.getJSONArray("choices")
                 .optJSONObject(0)?.getJSONObject("message")
                 ?.optString("content", "") ?: "无回复"
-            return content.trim()
+            return stripThinkTags(content.trim())
         }
     }
 
@@ -537,6 +537,28 @@ class ScreenStreamActivity : AppCompatActivity() {
             baseUrl.contains("/v1/") -> "$baseUrl/chat/completions"
             else -> "$baseUrl/v1/chat/completions"
         }
+    }
+
+    /**
+     * 过滤 <think >...</think > 标签及其内容（某些模型如 DeepSeek 会输出思考过程）
+     * 支持流式中间态：当 </think > 尚未到达时，截断未闭合的 <think 块
+     */
+    private fun stripThinkTags(text: String): String {
+        var result = text
+        while (true) {
+            val start = result.indexOf("<think")
+            if (start < 0) break
+            val end = result.indexOf("</think", start)
+            if (end >= 0) {
+                val close = result.indexOf(">", end + 7)
+                result = if (close >= 0) result.removeRange(start, close + 1) else result.removeRange(start, result.length)
+            } else {
+                // 流式中间态：</think > 尚未到达，截断 <think 及其之后的所有内容
+                result = result.removeRange(start, result.length)
+                break
+            }
+        }
+        return result.trim()
     }
 
     private fun speakReply(text: String) {
