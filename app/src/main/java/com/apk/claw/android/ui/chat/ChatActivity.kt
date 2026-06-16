@@ -37,6 +37,7 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStreamReader
 import java.util.Base64
 import android.widget.Switch
 import android.widget.CompoundButton
@@ -236,6 +237,7 @@ class ChatActivity : BaseActivity() {
 
         // Handle incoming intents
         handleSkillIntent()
+        handleMarkdownIntent()
         handleScreenshotIntent()
         handlePushIntent()
         handleVoiceFloatIntent()
@@ -254,6 +256,7 @@ class ChatActivity : BaseActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         voiceFloatTextHandled = false
+        handleMarkdownIntent()
         handleScreenshotIntent()
         handleVoiceFloatIntent()
     }
@@ -655,6 +658,64 @@ class ChatActivity : BaseActivity() {
                 sendMessage()
             }, 300)
             intent.removeExtra("voice_text")
+        }
+    }
+
+    /**
+     * Handle Markdown file intent: read .md/.txt file content and display in chat as user message.
+     * When user opens a .md file from file manager, the content is shown as a Markdown user bubble
+     * and auto-sent to AI for analysis.
+     */
+    private fun handleMarkdownIntent() {
+        val intent = intent ?: return
+        // ACTION_VIEW with a content:// or file:// URI
+        if (intent.action != Intent.ACTION_VIEW && intent.action != Intent.ACTION_SEND) return
+        val uri: Uri = intent.data ?: intent.getParcelableExtra(Intent.EXTRA_STREAM) ?: return
+        // Only process text/markdown URIs
+        val mimeType = contentResolver.getType(uri)
+        val path = uri.path?.lowercase() ?: ""
+        val isMd = mimeType?.contains("markdown") == true || mimeType?.contains("text") == true
+                || path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")
+        if (!isMd) return
+
+        try {
+            val content = StringBuilder()
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                InputStreamReader(inputStream, Charsets.UTF_8).use { reader ->
+                    val buffer = CharArray(4096)
+                    var read: Int
+                    while (reader.read(buffer).also { read = it } != -1) {
+                        content.append(buffer, 0, read)
+                    }
+                }
+            }
+            val mdText = content.toString().trim()
+            if (mdText.isEmpty()) {
+                Toast.makeText(this, "文件内容为空", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            // Extract file name from URI for display
+            val fileName = uri.lastPathSegment?.substringAfterLast("/") ?: "文档"
+            val displayText = "📄 $fileName\n\n$mdText"
+
+            // Show markdown content as user message (Markwon renders it)
+            adapter.addMessage(ChatMessage(
+                text = displayText,
+                isUser = true,
+                timestamp = System.currentTimeMillis()
+            ))
+            rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+
+            // Auto-send to AI: ask it to analyze/summarize the document
+            val prompt = "请阅读并分析以下 Markdown 文档内容，给出摘要和关键要点：\n\n$mdText"
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                sendMessageWithPrompt(prompt)
+            }, 500)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "读取文件失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
