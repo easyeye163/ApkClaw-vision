@@ -96,67 +96,83 @@
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize">
-            <!-- 支持打开 .md 文件（文件管理器"打开方式"） -->
-            <intent-filter>
+            <!-- ====== 文件关联 intent-filter ====== -->
+            <!-- content:// URI: 通过 mimeType 匹配（文件管理器/Download 打开） -->
+            <!-- .md 文件: 系统/文件管理器常把 .md 识别为 text/plain -->
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:mimeType="text/markdown" />
-                <data android:mimeType="text/x-markdown" />
-                <data android:host="*" />
-                <data android:pathPattern=".*\\.md" />
-                <data android:pathPattern=".*\\.markdown" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
-            <!-- 兜底：不带 mimeType 的文件管理器（通过 pathPattern 匹配） -->
-            <intent-filter>
+            <!-- .md 文件: 部分 ROM 正确识别为 text/markdown -->
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
+                <data android:mimeType="text/markdown" />
+            </intent-filter>
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="text/x-markdown" />
+            </intent-filter>
+            <!-- 兜底: application/octet-stream（部分文件管理器对未知扩展名使用此类型） -->
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+            <!-- file:// URI: 通过 pathPattern 匹配（旧版文件管理器直接传文件路径） -->
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="file" />
                 <data android:mimeType="*/*" />
                 <data android:host="*" />
                 <data android:pathPattern=".*\\.md" />
                 <data android:pathPattern=".*\\.markdown" />
-            </intent-filter>
-            <!-- 支持 .txt 文件 -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:mimeType="text/plain" />
-                <data android:host="*" />
                 <data android:pathPattern=".*\\.txt" />
             </intent-filter>
-            <!-- 微信/QQ"用其他应用打开"（ACTION_SEND 单文件） -->
-            <intent-filter>
+
+            <!-- ====== 微信/QQ "用其他应用打开" ====== -->
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/markdown" />
-                <data android:mimeType="text/x-markdown" />
-                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter android:label="@string/app_name">
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
-            <!-- ACTION_SEND 兜底：兼容各种 mimeType -->
-            <intent-filter>
+            <!-- SEND 兜底 -->
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <!-- ACTION_SEND_MULTIPLE：多文件批量打开 -->
-            <intent-filter>
+
+            <!-- ====== 多文件批量打开 ====== -->
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/markdown" />
-                <data android:mimeType="text/x-markdown" />
                 <data android:mimeType="text/plain" />
-                <data android:mimeType="application/octet-stream" />
             </intent-filter>
-            <intent-filter>
+            <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />

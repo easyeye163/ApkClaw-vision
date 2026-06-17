@@ -674,14 +674,54 @@ class ChatActivity : BaseActivity() {
         }
     }
 
+    /** Check if a URI points to a .md/.markdown/.txt file */
+    private fun isMarkdownFile(uri: Uri): Boolean {
+        // Try lastPathSegment first (works for file:// and some content://)
+        val segment = uri.lastPathSegment?.lowercase() ?: ""
+        if (segment.endsWith(".md") || segment.endsWith(".markdown") || segment.endsWith(".txt")) return true
+        // For content:// URIs, query ContentResolver for the display name
+        if (uri.scheme == "content") {
+            try {
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0 && cursor.moveToFirst()) {
+                        val name = cursor.getString(nameIndex).lowercase()
+                        if (name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".txt")) return true
+                    }
+                }
+            } catch (_: Exception) {}
+            // Fallback: try to read as text and see if it looks like markdown
+            // (some URIs don't expose DISPLAY_NAME)
+            return true // Accept all content:// text URIs, worst case user sees non-md content
+        }
+        return false
+    }
+
+    /** Get display file name from URI */
+    private fun getFileName(uri: Uri): String {
+        val segment = uri.lastPathSegment?.substringAfterLast("/") ?: ""
+        if (segment.contains(".")) return segment
+        // Try ContentResolver for content:// URIs
+        if (uri.scheme == "content") {
+            try {
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0 && cursor.moveToFirst()) {
+                        val name = cursor.getString(nameIndex)
+                        if (name.isNotBlank()) return name
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return "文档"
+    }
+
     /** Handle file manager "open with" (ACTION_VIEW) */
     private fun handleViewIntent(intent: Intent) {
         val uri: Uri = intent.data ?: return
-        val path = uri.path?.lowercase() ?: ""
-        val isMd = path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")
-        if (!isMd) return
+        if (!isMarkdownFile(uri)) return
         val mdText = readTextFromUri(uri) ?: return
-        showMarkdownInChat(mdText, uri.lastPathSegment?.substringAfterLast("/") ?: "文档")
+        showMarkdownInChat(mdText, getFileName(uri))
     }
 
     /** Handle WeChat/QQ "open with" single file (ACTION_SEND) */
@@ -694,11 +734,9 @@ class ChatActivity : BaseActivity() {
         }
         // EXTRA_STREAM: file URI shared
         val uri: Uri = intent.getParcelableExtra(Intent.EXTRA_STREAM) ?: return
-        val path = uri.path?.lowercase() ?: ""
-        val isMd = path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")
-        if (!isMd) return
+        if (!isMarkdownFile(uri)) return
         val mdText = readTextFromUri(uri) ?: return
-        showMarkdownInChat(mdText, uri.lastPathSegment?.substringAfterLast("/") ?: "文档")
+        showMarkdownInChat(mdText, getFileName(uri))
     }
 
     /** Handle multiple files sent at once (ACTION_SEND_MULTIPLE) */
@@ -706,12 +744,10 @@ class ChatActivity : BaseActivity() {
         val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: return
         val sb = StringBuilder()
         for (uri in uris) {
-            val path = uri.path?.lowercase() ?: ""
-            if (path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")) {
+            if (isMarkdownFile(uri)) {
                 val text = readTextFromUri(uri)
                 if (text != null) {
-                    val name = uri.lastPathSegment?.substringAfterLast("/") ?: "文档"
-                    sb.append("### $name\n\n$text\n\n---\n\n")
+                    sb.append("### ${getFileName(uri)}\n\n$text\n\n---\n\n")
                 }
             }
         }
