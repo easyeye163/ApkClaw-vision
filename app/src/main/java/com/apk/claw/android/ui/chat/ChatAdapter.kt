@@ -1,6 +1,7 @@
 package com.apk.claw.android.ui.chat
 
 import android.graphics.BitmapFactory
+import android.text.method.LinkMovementMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -62,15 +63,23 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.MessageViewHolder>() {
         private val ivUserImage: ImageView = itemView.findViewById(R.id.ivUserImage)
         private val ivAgentImage: ImageView = itemView.findViewById(R.id.ivAgentImage)
 
+        init {
+            // Enable clickable links in both user and agent text views
+            tvUserText.movementMethod = LinkMovementMethod.getInstance()
+            tvAgentText.movementMethod = LinkMovementMethod.getInstance()
+        }
+
         fun bind(message: ChatActivity.ChatMessage, markwon: Markwon?) {
             layoutUser.visibility = if (message.isUser) View.VISIBLE else View.GONE
             layoutAgent.visibility = if (message.isUser) View.GONE else View.VISIBLE
 
+            val text = message.text ?: ""
             if (message.isUser) {
-                if (message.isMarkdown && markwon != null) {
-                    markwon.setMarkdown(tvUserText, message.text)
+                // All user messages rendered with Markdown
+                if (markwon != null && text.isNotEmpty()) {
+                    markwon.setMarkdown(tvUserText, text)
                 } else {
-                    tvUserText.text = message.text
+                    tvUserText.text = text
                 }
                 if (message.imageData != null) {
                     ivUserImage.visibility = View.VISIBLE
@@ -80,8 +89,12 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.MessageViewHolder>() {
                     ivUserImage.visibility = View.GONE
                 }
             } else {
-                // Use Markwon (with table plugin) for Markdown rendering on agent messages
-                markwon?.setMarkdown(tvAgentText, message.text ?: "")
+                // All agent messages rendered with Markdown
+                if (markwon != null && text.isNotEmpty()) {
+                    markwon.setMarkdown(tvAgentText, text)
+                } else {
+                    tvAgentText.text = text
+                }
                 ivAgentImage.visibility = View.GONE
             }
         }
