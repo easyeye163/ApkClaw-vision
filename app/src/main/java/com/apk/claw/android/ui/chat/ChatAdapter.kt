@@ -67,7 +67,11 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.MessageViewHolder>() {
             layoutAgent.visibility = if (message.isUser) View.GONE else View.VISIBLE
 
             if (message.isUser) {
-                tvUserText.text = message.text
+                if (message.isMarkdown && markwon != null) {
+                    markwon.setMarkdown(tvUserText, message.text)
+                } else {
+                    tvUserText.text = message.text
+                }
                 if (message.imageData != null) {
                     ivUserImage.visibility = View.VISIBLE
                     val bitmap = BitmapFactory.decodeByteArray(message.imageData, 0, message.imageData.size)

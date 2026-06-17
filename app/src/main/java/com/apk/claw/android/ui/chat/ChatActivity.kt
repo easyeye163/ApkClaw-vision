@@ -697,13 +697,15 @@ class ChatActivity : BaseActivity() {
 
             // Extract file name from URI for display
             val fileName = uri.lastPathSegment?.substringAfterLast("/") ?: "文档"
-            val displayText = "📄 $fileName\n\n$mdText"
+            // Wrap file name as a markdown heading so it renders nicely
+            val displayText = "### $fileName\n\n$mdText"
 
-            // Show markdown content as user message (Markwon renders it)
+            // Show markdown content as user message with Markwon rendering
             adapter.addMessage(ChatMessage(
                 text = displayText,
                 isUser = true,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                isMarkdown = true
             ))
             rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
 
@@ -1103,7 +1105,8 @@ class ChatActivity : BaseActivity() {
         val isUser: Boolean,
         val imageData: ByteArray? = null,
         val timestamp: Long,
-        val isThinking: Boolean = false
+        val isThinking: Boolean = false,
+        val isMarkdown: Boolean = false
     )
 
     interface ChatCallback {
