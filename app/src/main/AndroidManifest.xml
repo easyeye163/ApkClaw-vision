@@ -96,7 +96,7 @@
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize">
-            <!-- 支持打开 .md 文件 -->
+            <!-- 支持打开 .md 文件（文件管理器"打开方式"） -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -105,7 +105,18 @@
                 <data android:scheme="file" />
                 <data android:mimeType="text/markdown" />
                 <data android:mimeType="text/x-markdown" />
-                <data android:mimeType="text/plain" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.md" />
+                <data android:pathPattern=".*\\.markdown" />
+            </intent-filter>
+            <!-- 兜底：不带 mimeType 的文件管理器（通过 pathPattern 匹配） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
                 <data android:host="*" />
                 <data android:pathPattern=".*\\.md" />
                 <data android:pathPattern=".*\\.markdown" />
@@ -120,6 +131,35 @@
                 <data android:mimeType="text/plain" />
                 <data android:host="*" />
                 <data android:pathPattern=".*\\.txt" />
+            </intent-filter>
+            <!-- 微信/QQ"用其他应用打开"（ACTION_SEND 单文件） -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <!-- ACTION_SEND 兜底：兼容各种 mimeType -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <!-- ACTION_SEND_MULTIPLE：多文件批量打开 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/markdown" />
+                <data android:mimeType="text/x-markdown" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
         <activity

@@ -662,23 +662,66 @@ class ChatActivity : BaseActivity() {
     }
 
     /**
-     * Handle Markdown file intent: read .md/.txt file content and display in chat as user message.
-     * When user opens a .md file from file manager, the content is shown as a Markdown user bubble
-     * and auto-sent to AI for analysis.
+     * Handle external file intents: .md/.txt files opened from file managers,
+     * WeChat/QQ "open with", or shared text.
      */
     private fun handleMarkdownIntent() {
         val intent = intent ?: return
-        // ACTION_VIEW with a content:// or file:// URI
-        if (intent.action != Intent.ACTION_VIEW && intent.action != Intent.ACTION_SEND) return
-        val uri: Uri = intent.data ?: intent.getParcelableExtra(Intent.EXTRA_STREAM) ?: return
-        // Only process text/markdown URIs
-        val mimeType = contentResolver.getType(uri)
-        val path = uri.path?.lowercase() ?: ""
-        val isMd = mimeType?.contains("markdown") == true || mimeType?.contains("text") == true
-                || path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")
-        if (!isMd) return
+        when (intent.action) {
+            Intent.ACTION_VIEW -> handleViewIntent(intent)
+            Intent.ACTION_SEND -> handleSendIntent(intent)
+            Intent.ACTION_SEND_MULTIPLE -> handleSendMultipleIntent(intent)
+        }
+    }
 
-        try {
+    /** Handle file manager "open with" (ACTION_VIEW) */
+    private fun handleViewIntent(intent: Intent) {
+        val uri: Uri = intent.data ?: return
+        val path = uri.path?.lowercase() ?: ""
+        val isMd = path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")
+        if (!isMd) return
+        val mdText = readTextFromUri(uri) ?: return
+        showMarkdownInChat(mdText, uri.lastPathSegment?.substringAfterLast("/") ?: "文档")
+    }
+
+    /** Handle WeChat/QQ "open with" single file (ACTION_SEND) */
+    private fun handleSendIntent(intent: Intent) {
+        // EXTRA_TEXT: plain text shared directly
+        val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+        if (sharedText != null && sharedText.isNotBlank()) {
+            showMarkdownInChat(sharedText.trim(), "分享文本")
+            return
+        }
+        // EXTRA_STREAM: file URI shared
+        val uri: Uri = intent.getParcelableExtra(Intent.EXTRA_STREAM) ?: return
+        val path = uri.path?.lowercase() ?: ""
+        val isMd = path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")
+        if (!isMd) return
+        val mdText = readTextFromUri(uri) ?: return
+        showMarkdownInChat(mdText, uri.lastPathSegment?.substringAfterLast("/") ?: "文档")
+    }
+
+    /** Handle multiple files sent at once (ACTION_SEND_MULTIPLE) */
+    private fun handleSendMultipleIntent(intent: Intent) {
+        val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: return
+        val sb = StringBuilder()
+        for (uri in uris) {
+            val path = uri.path?.lowercase() ?: ""
+            if (path.endsWith(".md") || path.endsWith(".markdown") || path.endsWith(".txt")) {
+                val text = readTextFromUri(uri)
+                if (text != null) {
+                    val name = uri.lastPathSegment?.substringAfterLast("/") ?: "文档"
+                    sb.append("### $name\n\n$text\n\n---\n\n")
+                }
+            }
+        }
+        if (sb.isBlank()) return
+        showMarkdownInChat(sb.toString().trimEnd('-', ' ', '\n'), "批量文档")
+    }
+
+    /** Read text content from a URI */
+    private fun readTextFromUri(uri: Uri): String? {
+        return try {
             val content = StringBuilder()
             contentResolver.openInputStream(uri)?.use { inputStream ->
                 InputStreamReader(inputStream, Charsets.UTF_8).use { reader ->
@@ -689,36 +732,34 @@ class ChatActivity : BaseActivity() {
                     }
                 }
             }
-            val mdText = content.toString().trim()
-            if (mdText.isEmpty()) {
+            val text = content.toString().trim()
+            if (text.isEmpty()) {
                 Toast.makeText(this, "文件内容为空", Toast.LENGTH_SHORT).show()
-                return
+                null
+            } else {
+                text
             }
-
-            // Extract file name from URI for display
-            val fileName = uri.lastPathSegment?.substringAfterLast("/") ?: "文档"
-            // Wrap file name as a markdown heading so it renders nicely
-            val displayText = "### $fileName\n\n$mdText"
-
-            // Show markdown content as user message with Markwon rendering
-            adapter.addMessage(ChatMessage(
-                text = displayText,
-                isUser = true,
-                timestamp = System.currentTimeMillis(),
-                isMarkdown = true
-            ))
-            rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
-
-            // Auto-send to AI: ask it to analyze/summarize the document
-            val prompt = "请阅读并分析以下 Markdown 文档内容，给出摘要和关键要点：\n\n$mdText"
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                sendMessageWithPrompt(prompt)
-            }, 500)
-
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "读取文件失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            null
         }
+    }
+
+    /** Display markdown text in chat as user message and auto-send to AI */
+    private fun showMarkdownInChat(mdText: String, fileName: String) {
+        val displayText = "### $fileName\n\n$mdText"
+        adapter.addMessage(ChatMessage(
+            text = displayText,
+            isUser = true,
+            timestamp = System.currentTimeMillis(),
+            isMarkdown = true
+        ))
+        rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+        val prompt = "请阅读并分析以下 Markdown 文档内容，给出摘要和关键要点：\n\n$mdText"
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            sendMessageWithPrompt(prompt)
+        }, 500)
     }
 
     /**
