@@ -162,9 +162,58 @@ data class LocalModelInfo(
             } catch (_: Exception) { emptyList() }
         }
 
-        /** 获取完整模型列表（预设 + 自定义） */
+        /** 获取完整模型列表（预设 + 已保存自定义 + 磁盘扫描发现的已下载模型） */
         fun getAllModels(context: Context): List<LocalModelInfo> {
-            return BUILTIN_MODELS + loadCustomModels(context)
+            val existing = BUILTIN_MODELS + loadCustomModels(context)
+            val existingIds = existing.map { it.id }.toHashSet()
+
+            // 扫描本地模型下载目录，发现已下载但不在列表中的模型
+            val baseDir = File(context.filesDir, "local_models")
+            val discovered = mutableListOf<LocalModelInfo>()
+            if (baseDir.exists() && baseDir.isDirectory) {
+                val subDirs = baseDir.listFiles { f -> f.isDirectory } ?: emptyArray()
+                for (dir in subDirs) {
+                    if (dir.name in existingIds) continue
+
+                    // 查找 GGUF 文件（排除 mmproj）
+                    val ggufFiles = dir.listFiles { f ->
+                        f.name.lowercase().endsWith(".gguf") && !f.name.lowercase().contains("mmproj")
+                    } ?: continue
+
+                    val ggufFile = ggufFiles.firstOrNull() ?: continue
+                    val mmprojFile = dir.listFiles { f ->
+                        f.name.lowercase().contains("mmproj") && f.name.lowercase().endsWith(".gguf")
+                    }?.firstOrNull()
+
+                    val model = LocalModelInfo(
+                        id = dir.name,
+                        displayName = dir.name,
+                        description = "已下载模型（自动发现）",
+                        ggufFileName = ggufFile.name,
+                        mmprojFileName = mmprojFile?.name,
+                        modelSize = "~${formatSize(ggufFile.length())}",
+                        isCustom = true
+                    )
+                    discovered.add(model)
+                }
+            }
+
+            // 如果发现了新模型，自动保存到 SharedPreferences
+            if (discovered.isNotEmpty()) {
+                val allCustom = loadCustomModels(context).toMutableList() + discovered
+                saveCustomModels(context, allCustom)
+            }
+
+            return existing + discovered
+        }
+
+        private fun formatSize(bytes: Long): String {
+            return when {
+                bytes < 1024 -> "$bytes B"
+                bytes < 1048576 -> "%.1f KB".format(bytes / 1024.0)
+                bytes < 1073741824 -> "%.1f MB".format(bytes / 1048576.0)
+                else -> "%.2f GB".format(bytes / 1073741824.0)
+            }
         }
 
         /** 添加自定义模型 */
