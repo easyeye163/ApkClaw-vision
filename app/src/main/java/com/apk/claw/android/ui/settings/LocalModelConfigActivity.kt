@@ -154,8 +154,8 @@ class LocalModelConfigActivity : BaseActivity() {
     }
 
     /**
-     * Add a custom model by discovering GGUF files from a ModelScope/HuggingFace repo.
-     * Uses HuggingFace API to list files, then tries ModelScope for download.
+     * Add a custom model by discovering GGUF files from a ModelScope repo.
+     * Uses ModelScope API to list files and download.
      */
     private fun addCustomModel() {
         val repoId = etCustomRepo.text.toString().trim()
@@ -217,16 +217,16 @@ class LocalModelConfigActivity : BaseActivity() {
     )
 
     /**
-     * Discover GGUF files from a repo using HuggingFace API.
-     * Tries both "main" and "master" branches.
+     * Discover GGUF files from a repo using ModelScope API.
+     * Tries both "master" and "main" branches.
      */
     private fun discoverRepoFiles(repoId: String): RepoFiles {
-        val branches = listOf("main", "master")
+        val branches = listOf("master", "main")
         var lastError: Exception? = null
 
         for (branch in branches) {
             try {
-                val url = "https://huggingface.co/api/models/$repoId/tree/$branch"
+                val url = "https://modelscope.cn/api/v1/models/$repoId/repo/files?path=/&branch=$branch"
                 val request = Request.Builder().url(url).build()
                 val response = apiClient.newCall(request).execute()
                 if (!response.isSuccessful) {
@@ -237,20 +237,23 @@ class LocalModelConfigActivity : BaseActivity() {
                 val body = response.body?.string() ?: continue
                 response.close()
 
-                val jsonArray = org.json.JSONArray(body)
+                val rootObj = org.json.JSONObject(body)
+                val dataObj = rootObj.optJSONObject("Data") ?: continue
+                val filesArray = dataObj.optJSONArray("Files") ?: continue
+
                 val ggufFiles = mutableListOf<GgufFileEntry>()
                 val mmprojFiles = mutableListOf<GgufFileEntry>()
 
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    val path = obj.getString("path")
-                    val size = obj.optLong("size", 0L)
-                    val lowerPath = path.lowercase()
+                for (i in 0 until filesArray.length()) {
+                    val obj = filesArray.getJSONObject(i)
+                    val name = obj.getString("Name")
+                    val size = obj.optLong("Size", 0L)
+                    val lowerName = name.lowercase()
 
-                    if (lowerPath.endsWith(".gguf") && !lowerPath.contains("mmproj")) {
-                        ggufFiles.add(GgufFileEntry(path, size))
-                    } else if (lowerPath.contains("mmproj") && lowerPath.endsWith(".gguf")) {
-                        mmprojFiles.add(GgufFileEntry(path, size))
+                    if (lowerName.endsWith(".gguf") && !lowerName.contains("mmproj")) {
+                        ggufFiles.add(GgufFileEntry(name, size))
+                    } else if (lowerName.contains("mmproj") && lowerName.endsWith(".gguf")) {
+                        mmprojFiles.add(GgufFileEntry(name, size))
                     }
                 }
 
@@ -264,7 +267,7 @@ class LocalModelConfigActivity : BaseActivity() {
             }
         }
 
-        throw lastError ?: RuntimeException("未找到文件")
+        throw lastError ?: RuntimeException("未在 ModelScope 找到 GGUF 文件，请检查仓库名")
     }
 
     /** Show a dialog to pick which GGUF file to use */
