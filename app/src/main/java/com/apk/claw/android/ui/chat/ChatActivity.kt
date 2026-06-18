@@ -909,7 +909,7 @@ class ChatActivity : BaseActivity() {
 
         // 根据开关决定走本地模型、云端还是本地 LLM
         when {
-            switchLocalModel.isChecked -> sendLocalModelMessage(text)
+            switchLocalModel.isChecked -> sendLocalModelMessage(text, imageDataToSend)
             switchCloudMode.isChecked -> sendCloudMessage(text)
             else -> sendLocalMessage(text, imageDataToSend)
         }
@@ -986,16 +986,23 @@ class ChatActivity : BaseActivity() {
 
     /**
      * 本地模型模式：使用 llama.cpp 引擎直接推理
+     * 支持多模态：如果引擎已加载 mmproj 且传入了图片，先预填充图片再发送文本
      */
-    private fun sendLocalModelMessage(text: String) {
+    private fun sendLocalModelMessage(text: String, imageData: ByteArray? = null) {
         val engine = com.apk.claw.android.local.llm.LlamaEngine.getInstance(this)
         if (!engine.isModelLoaded) {
             Toast.makeText(this, getString(R.string.chat_local_model_not_loaded), Toast.LENGTH_LONG).show()
             return
         }
 
+        // 如果有图片但引擎不支持多模态，提示用户
+        if (imageData != null && !engine._mmprojLoaded) {
+            Toast.makeText(this, "当前模型不支持图片输入，请切换到多模态模型", Toast.LENGTH_LONG).show()
+            return
+        }
+
         val thinkingMessage = ChatMessage(
-            text = getString(R.string.chat_local_model_generating),
+            text = if (imageData != null) "正在识别图片..." else getString(R.string.chat_local_model_generating),
             isUser = false,
             timestamp = System.currentTimeMillis(),
             isThinking = true
@@ -1006,6 +1013,11 @@ class ChatActivity : BaseActivity() {
         val sb = StringBuilder()
         lifecycleScope.launch {
             try {
+                // 如果是多模态且带图片，先预填充图片
+                if (imageData != null && engine._mmprojLoaded) {
+                    engine.prefillImage(imageData)
+                }
+
                 // 50ms 节流：高速 token 累积后批量刷新 UI，避免逐 token 刷新导致闪烁
                 var lastUpdateTime = 0L
                 val throttleMs = 50L

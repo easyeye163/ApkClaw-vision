@@ -144,12 +144,12 @@ data class LocalModelInfo(
             isCustom = true
         )
 
-        /** 保存自定义模型列表到 SharedPreferences */
+        /** 保存自定义模型列表到 SharedPreferences（使用 commit 确保立即持久化） */
         fun saveCustomModels(context: Context, models: List<LocalModelInfo>) {
             val arr = JSONArray()
             models.filter { it.isCustom }.forEach { arr.put(it.toJson()) }
             context.getSharedPreferences(PREFS_CUSTOM_MODELS, Context.MODE_PRIVATE)
-                .edit().putString(KEY_CUSTOM_MODELS_LIST, arr.toString()).apply()
+                .edit().putString(KEY_CUSTOM_MODELS_LIST, arr.toString()).commit()
         }
 
         /** 读取自定义模型列表 */
