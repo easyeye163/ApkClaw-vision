@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
@@ -47,10 +48,15 @@ class LocalModelConfigActivity : BaseActivity() {
     private lateinit var seekbarMaxTokens: SeekBar
     private lateinit var tvTemperatureValue: TextView
     private lateinit var tvMaxTokensValue: TextView
+    private lateinit var etCustomRepo: EditText
+    private lateinit var btnAddCustom: KButton
+    private lateinit var btnRemoveCustom: KButton
 
     private var downloadJob: Job? = null
     private var isModelLoaded: Boolean = false
     private var selectedModel: LocalModelInfo = LocalModelInfo.DEFAULT_MODEL
+    private lateinit var allModels: List<LocalModelInfo>
+    private var adapter: LocalModelAdapter? = null
 
     private val modelsBaseDir: File
         get() = File(filesDir, "local_models")
@@ -86,6 +92,9 @@ class LocalModelConfigActivity : BaseActivity() {
         seekbarMaxTokens = findViewById(R.id.seekbar_max_tokens)
         tvTemperatureValue = findViewById(R.id.tv_temperature_value)
         tvMaxTokensValue = findViewById(R.id.tv_max_tokens_value)
+        etCustomRepo = findViewById(R.id.et_custom_repo)
+        btnAddCustom = findViewById(R.id.btn_add_custom)
+        btnRemoveCustom = findViewById(R.id.btn_remove_custom)
 
         setupModelList()
         setupSeekBarListeners()
@@ -98,15 +107,17 @@ class LocalModelConfigActivity : BaseActivity() {
         btnDeleteModel.setOnClickListener { confirmDelete() }
         btnSaveParams.setOnClickListener { saveParams() }
         btnSaveServerConfig.setOnClickListener { saveServerConfig() }
+        btnAddCustom.setOnClickListener { addCustomModel() }
+        btnRemoveCustom.setOnClickListener { removeCustomModel() }
     }
 
     private fun setupModelList() {
+        allModels = LocalModelInfo.getAllModels(this)
         val savedId = KVUtils.getLocalModelId()
-        selectedModel = LocalModelInfo.AVAILABLE_MODELS.find { it.id == savedId }
-            ?: LocalModelInfo.DEFAULT_MODEL
+        selectedModel = allModels.find { it.id == savedId } ?: LocalModelInfo.DEFAULT_MODEL
 
-        val adapter = LocalModelAdapter(
-            LocalModelInfo.AVAILABLE_MODELS,
+        adapter = LocalModelAdapter(
+            allModels,
             selectedModel.id
         ) { m ->
             selectedModel = m
@@ -118,6 +129,224 @@ class LocalModelConfigActivity : BaseActivity() {
         val recyclerView = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recycler_models)
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
+    }
+
+    /** Refresh the model list (after adding/removing custom models) */
+    private fun refreshModelList() {
+        allModels = LocalModelInfo.getAllModels(this)
+        adapter = LocalModelAdapter(allModels, selectedModel.id) { m ->
+            selectedModel = m
+            KVUtils.setLocalModelId(m.id)
+            updateUI()
+            Toast.makeText(this, getString(R.string.local_model_selected, m.displayName), Toast.LENGTH_SHORT).show()
+        }
+        val recyclerView = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recycler_models)
+        recyclerView.adapter = adapter
+    }
+
+    /**
+     * Add a custom model by discovering GGUF files from a ModelScope/HuggingFace repo.
+     * Uses HuggingFace API to list files, then tries ModelScope for download.
+     */
+    private fun addCustomModel() {
+        val repoId = etCustomRepo.text.toString().trim()
+        if (repoId.isBlank()) {
+            Toast.makeText(this, "请输入仓库 ID", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // Validate format: should contain at least one /
+        if (!repoId.contains("/")) {
+            Toast.makeText(this, "格式错误，应为 用户名/仓库名，如 ggml-org/Qwen2.5-Omni-3B-GGUF", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        btnAddCustom.isEnabled = false
+        btnAddCustom.text = "发现中..."
+        tvModelStatus.text = "正在发现仓库文件..."
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val files = discoverRepoFiles(repoId)
+                if (files.ggufFiles.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@LocalModelConfigActivity, "未找到 GGUF 文件，请检查仓库名", Toast.LENGTH_LONG).show()
+                        tvModelStatus.text = getString(R.string.local_model_status_not_ready)
+                        btnAddCustom.isEnabled = true
+                        btnAddCustom.text = "添加"
+                    }
+                    return@launch
+                }
+
+                withContext(Dispatchers.Main) {
+                    showGgufPickerDialog(repoId, files)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@LocalModelConfigActivity, "发现失败: ${e.message}", Toast.LENGTH_LONG).show()
+                    tvModelStatus.text = getString(R.string.local_model_status_not_ready)
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    btnAddCustom.isEnabled = true
+                    btnAddCustom.text = "添加"
+                }
+            }
+        }
+    }
+
+    /** Repo file discovery result */
+    private data class RepoFiles(
+        val ggufFiles: List<GgufFileEntry>,
+        val mmprojFiles: List<GgufFileEntry>
+    )
+
+    private data class GgufFileEntry(
+        val fileName: String,
+        val size: Long
+    )
+
+    /**
+     * Discover GGUF files from a repo using HuggingFace API.
+     * Tries both "main" and "master" branches.
+     */
+    private fun discoverRepoFiles(repoId: String): RepoFiles {
+        val branches = listOf("main", "master")
+        var lastError: Exception? = null
+
+        for (branch in branches) {
+            try {
+                val url = "https://huggingface.co/api/models/$repoId/tree/$branch"
+                val request = Request.Builder().url(url).build()
+                val response = httpClient.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    response.close()
+                    lastError = RuntimeException("HTTP ${response.code}")
+                    continue
+                }
+                val body = response.body?.string() ?: continue
+                response.close()
+
+                val jsonArray = org.json.JSONArray(body)
+                val ggufFiles = mutableListOf<GgufFileEntry>()
+                val mmprojFiles = mutableListOf<GgufFileEntry>()
+
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val path = obj.getString("path")
+                    val size = obj.optLong("size", 0L)
+                    val lowerPath = path.lowercase()
+
+                    if (lowerPath.endsWith(".gguf") && !lowerPath.contains("mmproj")) {
+                        ggufFiles.add(GgufFileEntry(path, size))
+                    } else if (lowerPath.contains("mmproj") && lowerPath.endsWith(".gguf")) {
+                        mmprojFiles.add(GgufFileEntry(path, size))
+                    }
+                }
+
+                if (ggufFiles.isNotEmpty()) {
+                    return RepoFiles(ggufFiles, mmprojFiles)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+
+        throw lastError ?: RuntimeException("未找到文件")
+    }
+
+    /** Show a dialog to pick which GGUF file to use */
+    private fun showGgufPickerDialog(repoId: String, files: RepoFiles) {
+        // Sort GGUF files: prefer Q4_K_M, then Q4, then others; smaller files first within same priority
+        val sorted = files.ggufFiles.sortedWith(compareByDescending<GgufFileEntry> {
+            when {
+                it.fileName.lowercase().contains("q4_k_m") -> 100
+                it.fileName.lowercase().contains("q4_k_s") -> 90
+                it.fileName.lowercase().contains("q4_0") -> 80
+                it.fileName.lowercase().contains("q5_k_m") -> 70
+                it.fileName.lowercase().contains("q3_k_m") -> 60
+                it.fileName.lowercase().contains("q2_k") -> 50
+                else -> 0
+            }
+        }.thenBy { it.size })
+
+        // Build display list
+        val displayNames = sorted.map { f ->
+            val sizeStr = formatFileSize(f.size)
+            val recommended = if (f.fileName.lowercase().contains("q4_k_m")) " [推荐]" else ""
+            "$f.fileName ($sizeStr)$recommended"
+        }.toTypedArray()
+
+        AlertDialog.Builder(this)
+            .setTitle("选择 GGUF 文件")
+            .setItems(displayNames) { _, which ->
+                val chosen = sorted[which]
+                createCustomModel(repoId, chosen, files.mmprojFiles)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Create and save a custom model from discovered files */
+    private fun createCustomModel(
+        repoId: String,
+        ggufEntry: GgufFileEntry,
+        mmprojFiles: List<GgufFileEntry>
+    ) {
+        // Generate a safe ID from repo name
+        val safeId = repoId.replace("/", "-").replace(".", "-").lowercase()
+            .replace(Regex("[^a-z0-9-]"), "-").replace(Regex("-+"), "-").trim('-')
+
+        // Try to find matching mmproj
+        val mmprojFile = mmprojFiles.firstOrNull()
+
+        val model = LocalModelInfo(
+            id = "$safeId-${System.currentTimeMillis() % 100000}",
+            displayName = repoId.substringAfterLast("/"),
+            description = "自定义模型: $repoId",
+            ggufFileName = ggufEntry.fileName,
+            mmprojFileName = mmprojFile?.fileName,
+            hfRepo = repoId,
+            msRepo = repoId,  // Same repo ID usually works on both platforms
+            modelSize = "~${formatFileSize(ggufEntry.size)}",
+            isCustom = true
+        )
+
+        LocalModelInfo.addCustomModel(this, model)
+        selectedModel = model
+        KVUtils.setLocalModelId(model.id)
+        etCustomRepo.text.clear()
+        refreshModelList()
+        updateUI()
+
+        val mmprojInfo = if (mmprojFile != null) "\nmmproj: ${mmprojFile.fileName}" else ""
+        Toast.makeText(this, "已添加: ${model.displayName}\n${ggufEntry.fileName}$mmprojInfo", Toast.LENGTH_LONG).show()
+    }
+
+    /** Remove the currently selected custom model */
+    private fun removeCustomModel() {
+        if (!selectedModel.isCustom) return
+        AlertDialog.Builder(this)
+            .setTitle("删除自定义模型")
+            .setMessage("确定删除 ${selectedModel.displayName}？已下载的文件也会被删除。")
+            .setPositiveButton("确定") { _, _ ->
+                LocalModelInfo.removeCustomModel(this, selectedModel.id)
+                // Also delete downloaded files
+                val modelDir = File(modelsBaseDir, selectedModel.id)
+                if (modelDir.exists()) modelDir.deleteRecursively()
+
+                selectedModel = LocalModelInfo.DEFAULT_MODEL
+                KVUtils.setLocalModelId(selectedModel.id)
+                refreshModelList()
+                updateUI()
+                isModelLoaded = false
+                Toast.makeText(this, "已删除", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun setupSeekBarListeners() {
@@ -181,6 +410,9 @@ class LocalModelConfigActivity : BaseActivity() {
         val isMmprojOk = mmprojFile == null || mmprojFile.exists()
         val isDownloaded = isGgufOk && isMmprojOk
         val downloadedSize = ggufFile.length() + (if (mmprojFile?.exists() == true) mmprojFile.length() else 0L)
+
+        // Show/hide delete custom button
+        btnRemoveCustom.visibility = if (selectedModel.isCustom) View.VISIBLE else View.GONE
 
         // Update status text
         when {
@@ -399,11 +631,16 @@ class LocalModelConfigActivity : BaseActivity() {
     private fun buildGgufUrls(): List<String> {
         val urls = mutableListOf<String>()
         selectedModel.directGgufUrl?.let { urls.add(it) }
+        // Try ModelScope first (faster for users in China)
+        selectedModel.msRepo?.let {
+            urls.add("https://modelscope.cn/models/$it/resolve/master/${selectedModel.ggufFileName}")
+        }
         selectedModel.hfRepo?.let {
             urls.add("https://huggingface.co/$it/resolve/main/${selectedModel.ggufFileName}")
         }
+        // Fallback: try ModelScope with "main" branch too
         selectedModel.msRepo?.let {
-            urls.add("https://modelscope.cn/models/$it/resolve/master/${selectedModel.ggufFileName}")
+            urls.add("https://modelscope.cn/models/$it/resolve/main/${selectedModel.ggufFileName}")
         }
         return urls
     }
@@ -412,11 +649,11 @@ class LocalModelConfigActivity : BaseActivity() {
         val mmprojFileName = selectedModel.mmprojFileName ?: return emptyList()
         val urls = mutableListOf<String>()
         selectedModel.directMmprojUrl?.let { urls.add(it) }
-        selectedModel.hfRepo?.let {
-            urls.add("https://huggingface.co/$it/resolve/main/$mmprojFileName")
-        }
         selectedModel.msRepo?.let {
             urls.add("https://modelscope.cn/models/$it/resolve/master/$mmprojFileName")
+        }
+        selectedModel.hfRepo?.let {
+            urls.add("https://huggingface.co/$it/resolve/main/$mmprojFileName")
         }
         return urls
     }

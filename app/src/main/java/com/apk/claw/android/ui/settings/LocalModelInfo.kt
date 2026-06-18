@@ -1,5 +1,8 @@
 package com.apk.claw.android.ui.settings
 
+import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 
 /**
@@ -18,7 +21,8 @@ data class LocalModelInfo(
     val msRepo: String? = null,
     val directGgufUrl: String? = null,
     val directMmprojUrl: String? = null,
-    val modelSize: String
+    val modelSize: String,
+    val isCustom: Boolean = false
 ) {
     /** 模型在本地存储的目录 */
     fun modelDir(baseDir: File): File = File(baseDir, "local_models/$id")
@@ -43,29 +47,24 @@ data class LocalModelInfo(
         return ggufSize + mmprojSize
     }
 
-    /** 构建所有可用的下载 URL 列表 */
-    fun buildDownloadUrls(): List<Pair<String, String>> {
-        val urls = mutableListOf<Pair<String, String>>()
-        hfRepo?.let { hf ->
-            urls.add("HuggingFace" to "https://huggingface.co/$hf/resolve/main/$ggufFileName")
-            mmprojFileName?.let { mm ->
-                urls.add("HuggingFace-mmproj" to "https://huggingface.co/$hf/resolve/main/$mm")
-            }
-        }
-        msRepo?.let { ms ->
-            urls.add("ModelScope" to "https://modelscope.cn/models/$ms/resolve/master/$ggufFileName")
-            mmprojFileName?.let { mm ->
-                urls.add("ModelScope-mmproj" to "https://modelscope.cn/models/$ms/resolve/master/$mm")
-            }
-        }
-        directGgufUrl?.let { urls.add("Direct" to it) }
-        directMmprojUrl?.let { urls.add("Direct-mmproj" to it) }
-        return urls
+    /** 序列化为 JSON */
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("displayName", displayName)
+        put("description", description)
+        put("ggufFileName", ggufFileName)
+        put("mmprojFileName", mmprojFileName)
+        put("hfRepo", hfRepo)
+        put("msRepo", msRepo)
+        put("directGgufUrl", directGgufUrl)
+        put("directMmprojUrl", directMmprojUrl)
+        put("modelSize", modelSize)
+        put("isCustom", true)
     }
 
     companion object {
         /** 预设的可用模型列表 */
-        val AVAILABLE_MODELS: List<LocalModelInfo> = listOf(
+        val BUILTIN_MODELS: List<LocalModelInfo> = listOf(
             LocalModelInfo(
                 id = "qwen2.5-1.5b-q4",
                 displayName = "Qwen2.5-1.5B (Q4_K_M)",
@@ -117,7 +116,7 @@ data class LocalModelInfo(
                 id = "llama-3.2-3b-q4",
                 displayName = "Llama-3.2-3B (Q4_K_M)",
                 description = "Meta 轻量级模型，纯文本对话 (3B)",
-                ggufFileName = "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+                ggufFileName = "llama-3.2-3b-instruct-Q4_K_M.gguf",
                 hfRepo = "hugging-quants/Llama-3.2-3B-Instruct-GGUF",
                 msRepo = "AI-ModelScope/Llama-3.2-3B-Instruct-GGUF",
                 modelSize = "~1.9 GB"
@@ -125,6 +124,62 @@ data class LocalModelInfo(
         )
 
         /** 默认选中模型 */
-        val DEFAULT_MODEL: LocalModelInfo = AVAILABLE_MODELS.first()
+        val DEFAULT_MODEL: LocalModelInfo = BUILTIN_MODELS.first()
+
+        private const val PREFS_CUSTOM_MODELS = "custom_local_models"
+        private const val KEY_CUSTOM_MODELS_LIST = "custom_models_json"
+
+        /** 从 JSON 反序列化 */
+        fun fromJson(json: JSONObject): LocalModelInfo = LocalModelInfo(
+            id = json.getString("id"),
+            displayName = json.getString("displayName"),
+            description = json.optString("description", ""),
+            ggufFileName = json.getString("ggufFileName"),
+            mmprojFileName = json.optString("mmprojFileName", null).ifBlank { null },
+            hfRepo = json.optString("hfRepo", null).ifBlank { null },
+            msRepo = json.optString("msRepo", null).ifBlank { null },
+            directGgufUrl = json.optString("directGgufUrl", null).ifBlank { null },
+            directMmprojUrl = json.optString("directMmprojUrl", null).ifBlank { null },
+            modelSize = json.getString("modelSize"),
+            isCustom = true
+        )
+
+        /** 保存自定义模型列表到 SharedPreferences */
+        fun saveCustomModels(context: Context, models: List<LocalModelInfo>) {
+            val arr = JSONArray()
+            models.filter { it.isCustom }.forEach { arr.put(it.toJson()) }
+            context.getSharedPreferences(PREFS_CUSTOM_MODELS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_CUSTOM_MODELS_LIST, arr.toString()).apply()
+        }
+
+        /** 读取自定义模型列表 */
+        fun loadCustomModels(context: Context): List<LocalModelInfo> {
+            val json = context.getSharedPreferences(PREFS_CUSTOM_MODELS, Context.MODE_PRIVATE)
+                .getString(KEY_CUSTOM_MODELS_LIST, null) ?: return emptyList()
+            return try {
+                val arr = JSONArray(json)
+                (0 until arr.length()).map { fromJson(arr.getJSONObject(it)) }
+            } catch (_: Exception) { emptyList() }
+        }
+
+        /** 获取完整模型列表（预设 + 自定义） */
+        fun getAllModels(context: Context): List<LocalModelInfo> {
+            return BUILTIN_MODELS + loadCustomModels(context)
+        }
+
+        /** 添加自定义模型 */
+        fun addCustomModel(context: Context, model: LocalModelInfo) {
+            val existing = loadCustomModels(context).toMutableList()
+            // Replace if same id exists
+            val idx = existing.indexOfFirst { it.id == model.id }
+            if (idx >= 0) existing[idx] = model else existing.add(model)
+            saveCustomModels(context, existing)
+        }
+
+        /** 删除自定义模型 */
+        fun removeCustomModel(context: Context, modelId: String) {
+            val filtered = loadCustomModels(context).filter { it.id != modelId }
+            saveCustomModels(context, filtered)
+        }
     }
 }
