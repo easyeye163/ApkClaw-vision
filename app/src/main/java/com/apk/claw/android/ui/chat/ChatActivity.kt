@@ -57,6 +57,10 @@ class ChatActivity : BaseActivity() {
         const val EXTRA_SKILL_NAME = "skill_name"
         const val EXTRA_MATCHED_SKILL_ID = "matched_skill_id"
         const val EXTRA_PUSH_TEXT = "push_text"
+        const val EXTRA_SCENARIO_SYSTEM_PROMPT = "scenario_system_prompt"
+        const val EXTRA_SCENARIO_NAME = "scenario_name"
+        const val EXTRA_SCENARIO_USE_LOCAL = "scenario_use_local"
+        const val EXTRA_SCENARIO_SUPPORTS_IMAGE = "scenario_supports_image"
         private const val STORAGE_KEY = "chat_history_messages"
         private const val MAX_MESSAGES = 100
         private val gson = Gson()
@@ -127,6 +131,10 @@ class ChatActivity : BaseActivity() {
     private var selectedImageData: ByteArray? = null
 
     private lateinit var skillSystem: com.apk.claw.android.skill.SkillSystem
+
+    // 场景模式：从 ScenarioListActivity 传入
+    private var scenarioSystemPrompt: String? = null
+    private var scenarioName: String? = null
 
     // Screenshot permission is handled by ScreenshotPermissionActivity
 
@@ -236,6 +244,7 @@ class ChatActivity : BaseActivity() {
         loadChatHistory()
 
         // Handle incoming intents
+        handleScenarioIntent()
         handleSkillIntent()
         handleMarkdownIntent()
         handleScreenshotIntent()
@@ -594,6 +603,62 @@ class ChatActivity : BaseActivity() {
         saveMessages(adapter.getMessages())
     }
 
+    /**
+     * 处理场景入口 Intent：设置系统提示词 + 切换模型模式
+     */
+    private fun handleScenarioIntent() {
+        val systemPrompt = intent.getStringExtra(EXTRA_SCENARIO_SYSTEM_PROMPT)
+        val name = intent.getStringExtra(EXTRA_SCENARIO_NAME)
+        val useLocal = intent.getBooleanExtra(EXTRA_SCENARIO_USE_LOCAL, false)
+
+        if (systemPrompt == null || name == null) return
+
+        scenarioSystemPrompt = systemPrompt
+        scenarioName = name
+
+        // 更新标题
+        findViewById<CommonToolbar>(R.id.toolbar).setTitle(name)
+
+        // 清空历史，开始新对话
+        adapter.clearAll()
+        saveMessages(emptyList())
+
+        // 切换模型模式
+        if (useLocal) {
+            switchLocalModel.isChecked = true
+            KVUtils.setLocalModelChatActive(true)
+            if (switchCloudMode.isChecked) {
+                switchCloudMode.isChecked = false
+                KVUtils.setCloudChatEnabled(false)
+                CloudChatManager.disconnect()
+                stopObservingConnectionState()
+                tvConnectionStatus.visibility = android.view.View.GONE
+            }
+        } else {
+            // 确保本地模型和云端模式都关闭（走默认 Agent 模式）
+            if (switchLocalModel.isChecked) {
+                switchLocalModel.isChecked = false
+                KVUtils.setLocalModelChatActive(false)
+            }
+            if (switchCloudMode.isChecked) {
+                switchCloudMode.isChecked = false
+                KVUtils.setCloudChatEnabled(false)
+                CloudChatManager.disconnect()
+                stopObservingConnectionState()
+                tvConnectionStatus.visibility = android.view.View.GONE
+            }
+        }
+        updateModeHint()
+
+        // 添加场景欢迎消息
+        adapter.addMessage(ChatMessage(
+            text = "已进入场景：$name\n\n你可以直接发送消息开始对话。${if (intent.getBooleanExtra(EXTRA_SCENARIO_SUPPORTS_IMAGE, false)) "\n\n本场景支持图片输入，点击左下角相册/相机按钮添加图片。" else ""}",
+            isUser = false,
+            timestamp = System.currentTimeMillis()
+        ))
+        rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+    }
+
     private fun handleSkillIntent() {
         val skillPrompt = intent.getStringExtra(EXTRA_SKILL_PROMPT)
         val skillName = intent.getStringExtra(EXTRA_SKILL_NAME)
@@ -907,11 +972,18 @@ class ChatActivity : BaseActivity() {
         adapter.addMessage(userMessage)
         rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
 
+        // 如果有场景 system prompt，将其注入到用户消息中
+        val finalText = if (scenarioSystemPrompt != null) {
+            "[系统设定]\n$scenarioSystemPrompt\n[系统设定结束]\n\n用户：$text"
+        } else {
+            text
+        }
+
         // 根据开关决定走本地模型、云端还是本地 LLM
         when {
-            switchLocalModel.isChecked -> sendLocalModelMessage(text, imageDataToSend)
-            switchCloudMode.isChecked -> sendCloudMessage(text)
-            else -> sendLocalMessage(text, imageDataToSend)
+            switchLocalModel.isChecked -> sendLocalModelMessage(finalText, imageDataToSend)
+            switchCloudMode.isChecked -> sendCloudMessage(finalText)
+            else -> sendLocalMessage(finalText, imageDataToSend)
         }
     }
 

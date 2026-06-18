@@ -76,6 +76,33 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/btnScenarios"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="12pt"
+            android:layout_marginStart="8pt"
+            android:background="@color/colorBgSecondary">
+
+            <ImageView
+                android:layout_width="32pt"
+                android:layout_height="32pt"
+                android:src="@drawable/ic_scenarios"
+                app:tint="@color/colorBrandPrimary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6pt"
+                android:text="@string/home_btn_scenarios"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/btnTimeline"
             android:layout_width="0dp"
             android:layout_height="wrap_content"

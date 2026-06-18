@@ -187,6 +187,10 @@
             android:exported="false"
             android:screenOrientation="portrait" />
         <activity
+            android:name=".ui.scenario.ScenarioListActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".ui.timeline.TimelineActivity"
             android:exported="false"
             android:screenOrientation="portrait" />

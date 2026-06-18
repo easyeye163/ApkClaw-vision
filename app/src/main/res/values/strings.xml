@@ -249,7 +249,14 @@
     <!-- Home Quick Actions -->
     <string name="home_btn_chat">对话</string>
     <string name="home_btn_skills">技能</string>
+    <string name="home_btn_scenarios">场景</string>
     <string name="home_btn_timeline">时间线</string>
+
+    <!-- Scenarios -->
+    <string name="scenario_title">应用场景</string>
+    <string name="scenario_use_local">使用本地模型</string>
+    <string name="scenario_use_remote">使用远程模型</string>
+    <string name="scenario_image_hint">本场景支持图片输入</string>
 
     <!-- Chat -->
     <string name="chat_title">AI 对话</string>

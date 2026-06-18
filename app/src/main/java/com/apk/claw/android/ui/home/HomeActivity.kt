@@ -22,6 +22,7 @@ import com.apk.claw.android.ui.guide.GuideActivity
 import com.apk.claw.android.ui.settings.SettingsActivity
 import com.apk.claw.android.ui.chat.ChatActivity
 import com.apk.claw.android.ui.skill.SkillManageActivity
+import com.apk.claw.android.ui.scenario.ScenarioListActivity
 import com.apk.claw.android.ui.timeline.TimelineActivity
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.widget.CommonToolbar
@@ -121,6 +122,9 @@ class HomeActivity : BaseActivity() {
         }
         findViewById<View>(R.id.btnSkills).setOnClickListener {
             startActivity(Intent(this, SkillManageActivity::class.java))
+        }
+        findViewById<View>(R.id.btnScenarios).setOnClickListener {
+            startActivity(Intent(this, ScenarioListActivity::class.java))
         }
         findViewById<View>(R.id.btnTimeline).setOnClickListener {
             startActivity(Intent(this, TimelineActivity::class.java))
