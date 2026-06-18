@@ -61,11 +61,20 @@ class LocalModelConfigActivity : BaseActivity() {
     private val modelsBaseDir: File
         get() = File(filesDir, "local_models")
 
+    // ModelScope 下载专用：大超时，应对大文件慢速下载
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .build()
+    }
+    // API 请求专用（文件发现等小请求）
+    private val apiClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
 
@@ -219,7 +228,7 @@ class LocalModelConfigActivity : BaseActivity() {
             try {
                 val url = "https://huggingface.co/api/models/$repoId/tree/$branch"
                 val request = Request.Builder().url(url).build()
-                val response = httpClient.newCall(request).execute()
+                val response = apiClient.newCall(request).execute()
                 if (!response.isSuccessful) {
                     response.close()
                     lastError = RuntimeException("HTTP ${response.code}")
@@ -631,15 +640,9 @@ class LocalModelConfigActivity : BaseActivity() {
     private fun buildGgufUrls(): List<String> {
         val urls = mutableListOf<String>()
         selectedModel.directGgufUrl?.let { urls.add(it) }
-        // Try ModelScope first (faster for users in China)
+        // 仅使用 ModelScope 下载
         selectedModel.msRepo?.let {
             urls.add("https://modelscope.cn/models/$it/resolve/master/${selectedModel.ggufFileName}")
-        }
-        selectedModel.hfRepo?.let {
-            urls.add("https://huggingface.co/$it/resolve/main/${selectedModel.ggufFileName}")
-        }
-        // Fallback: try ModelScope with "main" branch too
-        selectedModel.msRepo?.let {
             urls.add("https://modelscope.cn/models/$it/resolve/main/${selectedModel.ggufFileName}")
         }
         return urls
@@ -649,11 +652,10 @@ class LocalModelConfigActivity : BaseActivity() {
         val mmprojFileName = selectedModel.mmprojFileName ?: return emptyList()
         val urls = mutableListOf<String>()
         selectedModel.directMmprojUrl?.let { urls.add(it) }
+        // 仅使用 ModelScope 下载
         selectedModel.msRepo?.let {
             urls.add("https://modelscope.cn/models/$it/resolve/master/$mmprojFileName")
-        }
-        selectedModel.hfRepo?.let {
-            urls.add("https://huggingface.co/$it/resolve/main/$mmprojFileName")
+            urls.add("https://modelscope.cn/models/$it/resolve/main/$mmprojFileName")
         }
         return urls
     }
