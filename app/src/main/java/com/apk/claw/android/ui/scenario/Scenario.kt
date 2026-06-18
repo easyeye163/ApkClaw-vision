@@ -98,7 +98,7 @@ data class Scenario(
             Scenario(
                 id = "meeting_notes",
                 title = "跨语言会议记录",
-                description = "实时识别多语种混合输入，统一翻译总结，按"发言人-观点-待办"格式生成结构化会议纪要。",
+                description = "实时识别多语种混合输入，统一翻译总结，按「发言人-观点-待办」格式生成结构化会议纪要。",
                 tag = "语音",
                 systemPrompt = """你是一个专业的跨语言会议记录助手，能够处理多语种混合的会议内容。
 
@@ -132,7 +132,7 @@ data class Scenario(
             Scenario(
                 id = "visual_qa",
                 title = "视觉问答辅助",
-                description = "举起摄像头即可获得"所见即所得"的智能解答，支持古迹讲解、设备参数读取、环境描述等场景。",
+                description = "举起摄像头即可获得所见即所得的智能解答，支持古迹讲解、设备参数读取、环境描述等场景。",
                 tag = "视觉",
                 supportsImage = true,
                 systemPrompt = """你是一个移动端视觉问答（VQA）智能助手，能够理解图片内容并回答用户的问题。
@@ -189,7 +189,7 @@ data class Scenario(
             Scenario(
                 id = "education_solver",
                 title = "图文解题助手",
-                description = "识别题目文字和几何图形、函数图像等视觉信息，分步骤讲解解题逻辑，扮演"耐心导师"引导思考。",
+                description = "识别题目文字和几何图形、函数图像等视觉信息，分步骤讲解解题逻辑，扮演耐心导师引导思考。",
                 tag = "教育",
                 supportsImage = true,
                 systemPrompt = """你是一个耐心的教育解题助手，擅长引导式教学而非直接给出答案。
