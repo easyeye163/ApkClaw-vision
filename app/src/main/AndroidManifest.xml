@@ -86,6 +86,14 @@
             android:name=".ui.web.WebActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
+
+        <!-- FPV 飞行探索游戏（全屏横屏/竖屏自适应） -->
+        <activity
+            android:name=".ui.fpv.FPVGameActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.ApkClaw" />
         <activity
             android:name=".ui.chat.CameraActivity"
             android:exported="false"

@@ -513,4 +513,9 @@
     <string name="tts_config_test_text">你好，这是一个语音朗读测试。</string>
     <string name="tts_config_saved">TTS 配置已保存</string>
     <string name="tts_config_init_failed">TTS 初始化失败</string>
+
+    <!-- FPV 飞行游戏 -->
+    <string name="home_btn_fpv_game">FPV 游戏</string>
+    <string name="fpv_loading">加载 3D 世界中...</string>
+    <string name="fpv_title">FPV 飞行探索</string>
 </resources>

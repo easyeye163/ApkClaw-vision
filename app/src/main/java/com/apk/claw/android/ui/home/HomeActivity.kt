@@ -24,6 +24,7 @@ import com.apk.claw.android.ui.chat.ChatActivity
 import com.apk.claw.android.ui.skill.SkillManageActivity
 import com.apk.claw.android.ui.scenario.ScenarioListActivity
 import com.apk.claw.android.ui.timeline.TimelineActivity
+import com.apk.claw.android.ui.fpv.FPVGameActivity
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.widget.CommonToolbar
 import com.apk.claw.android.widget.PermissionCardView
@@ -128,6 +129,9 @@ class HomeActivity : BaseActivity() {
         }
         findViewById<View>(R.id.btnTimeline).setOnClickListener {
             startActivity(Intent(this, TimelineActivity::class.java))
+        }
+        findViewById<View>(R.id.btnFpvGame).setOnClickListener {
+            FPVGameActivity.start(this)
         }
 
         cardAccessibility = findViewById(R.id.cardAccessibility)

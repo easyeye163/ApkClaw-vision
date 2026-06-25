@@ -4,6 +4,8 @@ import com.apk.claw.android.tool.impl.*
 import com.apk.claw.android.tool.impl.mobile.*
 import com.apk.claw.android.tool.impl.tv.*
 
+import com.apk.claw.android.tool.impl.fpv.*
+
 object ToolRegistry {
 
     enum class DeviceType { TV, MOBILE }
@@ -58,6 +60,37 @@ object ToolRegistry {
         register(LongPressTool())
         register(SwipeTool())
         register(ScrollToFindTool())
+    }
+
+    /**
+     * 注册 FPV 3D 世界建造工具
+     * 这些工具通过 FPVToolBridge → WebView → Zustand Store 控制 3D 场景
+     */
+    fun registerFPVTools() {
+        register(AddTreeTool())
+        register(AddHouseBodyTool())
+        register(AddRoofTool())
+        register(AddWindowTool())
+        register(AddGarageTool())
+        register(AddRockTool())
+        register(AddMountainTool())
+        register(AddCloudTool())
+        register(AddWaterTool())
+        register(AddFloatingIslandTool())
+        register(AddWallTool())
+        register(AddRoadTool())
+        register(AddLampTool())
+        register(AddFenceTool())
+        register(AddTowerTool())
+        register(AddBridgeTool())
+        register(AddFlowerTool())
+        register(AddShrubTool())
+        register(AddStatueTool())
+        register(AddCampfireTool())
+        register(AddSignTool())
+        register(AddCrateTool())
+        register(RemoveDynamicTool())
+        register(ClearDynamicObjectsTool())
     }
 
     fun register(tool: BaseTool) {

@@ -535,4 +535,9 @@
     <string name="local_model_load_fail_title">模型加载失败</string>
     <string name="local_model_mmproj_download_failed">多模态投影文件(mmproj)下载失败，请检查网络后重新下载</string>
     <string name="local_model_mmproj_missing">缺少多模态投影文件(mmproj)，请重新下载模型</string>
+
+    <!-- FPV Game -->
+    <string name="home_btn_fpv_game">FPV Game</string>
+    <string name="fpv_loading">Loading 3D World...</string>
+    <string name="fpv_title">FPV Flight Explorer</string>
 </resources>
