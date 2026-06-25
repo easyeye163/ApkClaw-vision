@@ -25,6 +25,10 @@ import dev.langchain4j.data.message.ChatMessage
 import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.model.chat.request.ChatRequest
+import dev.langchain4j.model.chat.request.json.JsonIntegerSchema
+import dev.langchain4j.model.chat.request.json.JsonNumberSchema
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema
+import dev.langchain4j.model.chat.request.json.JsonStringSchema
 import dev.langchain4j.model.openai.OpenAiChatModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -49,19 +53,77 @@ class FPVGameActivity : BaseActivity() {
 可用工具：addTree(x,z,height?,color?), addHouseBody(x,z,width?,height?,depth?,color?), addRock(x,z,scale?,color?), addCloud(x,z,y?,scale?), addFlower(x,z,color?), addCrate(x,z,size?,color?), addSign(x,z,text), addLamp(x,z), executeCode(code), removeDynamic(id), clearDynamicObjects()。
 规则：1.只使用上面列出的工具 2.合理分布物体位置 3.颜色可用RED/GREEN/BLUE等名称或#hex 4.坐标范围-200到200 5.用中文回复 6.尽量一次调用多个工具""".trimIndent()
 
+    private fun tool(name: String, desc: String, vararg params: Pair<String, dev.langchain4j.model.chat.request.json.JsonSchemaElement>): ToolSpecification {
+        val map = linkedMapOf<String, dev.langchain4j.model.chat.request.json.JsonSchemaElement>()
+        val required = mutableListOf<String>()
+        for ((pname, schema) in params) {
+            map[pname] = schema
+            required.add(pname)
+        }
+        return if (map.isEmpty()) {
+            ToolSpecification.builder().name(name).description(desc).build()
+        } else {
+            ToolSpecification.builder().name(name).description(desc)
+                .parameters(JsonObjectSchema.builder().addProperties(map).required(required).build())
+                .build()
+        }
+    }
+
     private val TOOL_SPECS: List<ToolSpecification> by lazy {
         listOf(
-            ToolSpecification.builder().name("addTree").description("在坐标添加树").addParameter("x","integer","X").addParameter("z","integer","Z").addParameter("height","integer","树高").addParameter("color","string","颜色").build(),
-            ToolSpecification.builder().name("addHouseBody").description("添加房屋").addParameter("x","integer","X").addParameter("z","integer","Z").addParameter("width","integer","宽").addParameter("height","integer","高").addParameter("depth","integer","深").addParameter("color","string","颜色").build(),
-            ToolSpecification.builder().name("addRock").description("添加石头").addParameter("x","integer","X").addParameter("z","integer","Z").addParameter("scale","number","大小").addParameter("color","string","颜色").build(),
-            ToolSpecification.builder().name("addCloud").description("添加云朵").addParameter("x","integer","X").addParameter("z","integer","Z").addParameter("y","integer","高度").addParameter("scale","number","缩放").build(),
-            ToolSpecification.builder().name("addFlower").description("添加花").addParameter("x","integer","X").addParameter("z","integer","Z").addParameter("color","string","颜色").build(),
-            ToolSpecification.builder().name("addCrate").description("添加箱子").addParameter("x","integer","X").addParameter("z","integer","Z").addParameter("size","number","大小").addParameter("color","string","颜色").build(),
-            ToolSpecification.builder().name("addSign").description("添加告示牌").addParameter("x","integer","X").addParameter("z","integer","Z").addParameter("text","string","文字").build(),
-            ToolSpecification.builder().name("addLamp").description("添加路灯").addParameter("x","integer","X").addParameter("z","integer","Z").build(),
-            ToolSpecification.builder().name("executeCode").description("执行Three.js代码。可用:box(x,y,z,w,h,d,color),sphere(x,y,z,r,color),cylinder(x,y,z,rt,rb,h,color),cone(x,y,z,r,h,color),torus(x,y,z,r,tube,color)。常量:PI,RED,GREEN,BLUE,YELLOW,ORANGE,PURPLE,PINK,CYAN,WHITE,GRAY,BROWN,GOLD,SILVER").addParameter("code","string","JS代码").build(),
-            ToolSpecification.builder().name("removeDynamic").description("删除动态物体").addParameter("id","string","物体ID").build(),
-            ToolSpecification.builder().name("clearDynamicObjects").description("清除所有动态物体").build()
+            tool("addTree", "在坐标(x,z)添加一棵树",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build(),
+                "height" to JsonIntegerSchema.builder().description("树高(可选,默认4)").build(),
+                "color" to JsonStringSchema.builder().description("颜色(可选,如GREEN/BROWN)").build()
+            ),
+            tool("addHouseBody", "在坐标添加房屋",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build(),
+                "width" to JsonIntegerSchema.builder().description("宽度").build(),
+                "height" to JsonIntegerSchema.builder().description("高度").build(),
+                "depth" to JsonIntegerSchema.builder().description("深度").build(),
+                "color" to JsonStringSchema.builder().description("颜色").build()
+            ),
+            tool("addRock", "在坐标添加石头",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build(),
+                "scale" to JsonNumberSchema.builder().description("大小").build(),
+                "color" to JsonStringSchema.builder().description("颜色").build()
+            ),
+            tool("addCloud", "在坐标添加云朵",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build(),
+                "y" to JsonIntegerSchema.builder().description("高度").build(),
+                "scale" to JsonNumberSchema.builder().description("缩放").build()
+            ),
+            tool("addFlower", "在坐标添加花",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build(),
+                "color" to JsonStringSchema.builder().description("颜色").build()
+            ),
+            tool("addCrate", "在坐标添加箱子",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build(),
+                "size" to JsonNumberSchema.builder().description("大小").build(),
+                "color" to JsonStringSchema.builder().description("颜色").build()
+            ),
+            tool("addSign", "在坐标添加告示牌",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build(),
+                "text" to JsonStringSchema.builder().description("文字").build()
+            ),
+            tool("addLamp", "在坐标添加路灯(带光源)",
+                "x" to JsonIntegerSchema.builder().description("X坐标").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标").build()
+            ),
+            tool("executeCode", "执行Three.js代码。可用:box(x,y,z,w,h,d,color),sphere(x,y,z,r,color),cylinder(x,y,z,rt,rb,h,color),cone(x,y,z,r,h,color),torus(x,y,z,r,tube,color)。常量:PI,RED,GREEN,BLUE,YELLOW,ORANGE,PURPLE,PINK,CYAN,WHITE,GRAY,BROWN,GOLD,SILVER",
+                "code" to JsonStringSchema.builder().description("JavaScript代码").build()
+            ),
+            tool("removeDynamic", "删除指定ID的动态物体",
+                "id" to JsonStringSchema.builder().description("物体ID").build()
+            ),
+            tool("clearDynamicObjects", "清除所有AI添加的动态物体")
         )
     }
 
@@ -77,7 +139,6 @@ class FPVGameActivity : BaseActivity() {
                 .httpClientBuilder(OkHttpClientBuilderAdapter())
             val baseUrl = KVUtils.getLlmBaseUrl()
             if (baseUrl.isNotEmpty()) b.baseUrl(baseUrl)
-            // 不设 maxTokens，用模型默认最大值
             chatModel = b.build()
             chatModel
         } catch (e: Exception) { XLog.e(TAG, "ChatModel: ${e.message}"); null }
