@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>FPV Sky Explorer</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',system-ui,sans-serif;}
+#canvasWrap{position:fixed;inset:0;z-index:0;}
+canvas{display:block;width:100%;height:100%;}
+
+/* ── Start Screen ── */
+#startScreen{
+  position:fixed;inset:0;z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#0a0e27 0%,#1b2a5c 40%,#2d4a8c 70%,#4a7cc9 100%);
+  color:#fff;text-align:center;
+  transition:opacity .6s ease,visibility .6s ease;
+}
+#startScreen.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+#startScreen h1{font-size:clamp(2rem,6vw,3.6rem);font-weight:800;letter-spacing:.04em;margin-bottom:.3em;text-shadow:0 2px 20px rgba(0,0,0,.5);}
+#startScreen p{font-size:clamp(.9rem,2.5vw,1.15rem);opacity:.85;margin-bottom:2em;max-width:420px;line-height:1.6;}
+#startBtn{
+  padding:.9em 3em;font-size:1.15rem;font-weight:700;border:none;border-radius:50px;
+  background:linear-gradient(135deg,#f9a825,#ff6f00);color:#fff;cursor:pointer;
+  box-shadow:0 4px 24px rgba(255,111,0,.45);transition:transform .2s,box-shadow .2s;
+}
+#startBtn:hover{transform:scale(1.05);box-shadow:0 6px 32px rgba(255,111,0,.65);}
+#startBtn:active{transform:scale(.97);}
+.controls-hint{margin-top:1.6em;font-size:.8rem;opacity:.6;line-height:1.7;}
+
+/* ── HUD ── */
+#hud{
+  position:fixed;top:0;left:0;right:0;z-index:50;
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding:14px 20px;pointer-events:none;
+  opacity:0;transition:opacity .5s ease;
+}
+#hud.visible{opacity:1;}
+.hud-box{
+  background:rgba(0,0,0,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,.12);border-radius:12px;
+  padding:8px 16px;color:#fff;font-size:.85rem;font-weight:600;
+  display:flex;align-items:center;gap:8px;
+}
+.hud-box .label{opacity:.6;font-weight:400;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;}
+.hud-box .val{font-variant-numeric:tabular-nums;min-width:48px;text-align:right;}
+
+/* ── Chat Panel ── */
+#chatPanel{
+  position:fixed;bottom:0;right:0;z-index:60;
+  width:min(380px,92vw);height:60vh;
+  background:rgba(10,14,39,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-top-left-radius:16px;border:1px solid rgba(255,255,255,.08);
+  border-right:none;border-bottom:none;
+  display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .35s cubic-bezier(.4,0,.2,1);
+  overflow:hidden;
+}
+#chatPanel.open{transform:translateX(0);}
+#chatToggle{
+  position:absolute;top:-44px;left:0;
+  width:44px;height:44px;border-radius:12px 0 0 0;
+  background:rgba(10,14,39,.92);border:1px solid rgba(255,255,255,.08);border-right:none;border-bottom:none;
+  color:#fff;font-size:1.3rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:auto;
+}
+#chatHeader{
+  padding:10px 14px;font-size:.82rem;font-weight:700;color:rgba(255,255,255,.7);
+  text-transform:uppercase;letter-spacing:.08em;
+  border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0;
+}
+#chatMessages{
+  flex:1;overflow-y:auto;padding:10px 12px;
+  will-change:transform;
+  -webkit-overflow-scrolling:touch;
+}
+#chatMessages::-webkit-scrollbar{width:4px;}
+#chatMessages::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:4px;}
+.msg{
+  margin-bottom:8px;padding:8px 12px;border-radius:10px;
+  font-size:.82rem;line-height:1.55;word-wrap:break-word;
+  opacity:0;transform:translateY(8px);
+  max-width:100%;
+}
+.msg.user{background:rgba(74,124,201,.3);color:#c8deff;align-self:flex-end;margin-left:20%;}
+.msg.bot{background:rgba(255,255,255,.07);color:rgba(255,255,255,.85);margin-right:12%;}
+.msg.system{background:rgba(255,193,7,.12);color:#ffd54f;font-style:italic;font-size:.78rem;}
+#chatInputWrap{
+  display:flex;gap:8px;padding:10px 12px;
+  border-top:1px solid rgba(255,255,255,.06);flex-shrink:0;
+}
+#chatInput{
+  flex:1;padding:8px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;
+  background:rgba(255,255,255,.06);color:#fff;font-size:.85rem;outline:none;
+}
+#chatInput::placeholder{color:rgba(255,255,255,.3);}
+#chatInput:focus{border-color:rgba(74,124,201,.6);}
+#chatSend{
+  padding:8px 16px;border:none;border-radius:10px;
+  background:linear-gradient(135deg,#f9a825,#ff6f00);color:#fff;font-weight:700;
+  font-size:.85rem;cursor:pointer;flex-shrink:0;
+}
+
+/* ── Notification ── */
+#notification{
+  position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:70;
+  background:rgba(249,168,37,.92);color:#1a1a2e;padding:10px 24px;border-radius:50px;
+  font-weight:700;font-size:.95rem;pointer-events:none;
+  opacity:0;transition:opacity .4s,transform .4s;
+  white-space:nowrap;
+}
+#notification.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── Completion Screen ── */
+#completionScreen{
+  position:fixed;inset:0;z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  color:#fff;text-align:center;
+  opacity:0;visibility:hidden;transition:opacity .6s,visibility .6s;
+}
+#completionScreen.visible{opacity:1;visibility:visible;}
+#completionScreen h2{font-size:clamp(1.8rem,5vw,3rem);font-weight:800;margin-bottom:.4em;color:#f9a825;}
+#completionScreen p{font-size:1.05rem;opacity:.8;margin-bottom:1.5em;}
+#restartBtn{
+  padding:.8em 2.5em;font-size:1rem;font-weight:700;border:none;border-radius:50px;
+  background:linear-gradient(135deg,#4a7cc9,#2d4a8c);color:#fff;cursor:pointer;
+  box-shadow:0 4px 20px rgba(45,74,140,.5);transition:transform .2s;
+}
+#restartBtn:hover{transform:scale(1.05);}
+
+/* ── Touch Controls ── */
+#touchControls{
+  position:fixed;bottom:20px;left:20px;z-index:55;
+  display:none;pointer-events:auto;
+}
+.touch-btn{
+  width:56px;height:56px;border-radius:50%;
+  background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.2);
+  color:rgba(255,255,255,.6);font-size:1.2rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:transparent;user-select:none;
+}
+.touch-btn:active{background:rgba(255,255,255,.25);}
+.touch-row{display:flex;gap:8px;justify-content:center;}
+.touch-row+.touch-row{margin-top:6px;}
+</style>
+</head>
+<body>
+
+<div id="canvasWrap"></div>
+
+<!-- Start Screen -->
+<div id="startScreen">
+  <h1>FPV Sky Explorer</h1>
+  <p>Fly through a beautiful 3D world. Collect all 12 treasure chests hidden across mountains, forests, and lakes.</p>
+  <button id="startBtn">Take Off</button>
+  <div class="controls-hint">
+    WASD / Arrows — Fly &nbsp;|&nbsp; Space — Up &nbsp;|&nbsp; Shift — Down<br>
+    Touch — on-screen buttons &nbsp;|&nbsp; Chat — AI assistant (bottom-right)
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-box"><span class="label">Speed</span><span class="val" id="hudSpeed">0</span></div>
+  <div class="hud-box"><span class="label">Alt</span><span class="val" id="hudAlt">0</span></div>
+  <div class="hud-box"><span class="label">Chests</span><span class="val" id="hudChests">0/12</span></div>
+</div>
+
+<!-- Chat Panel -->
+<div id="chatPanel">
+  <button id="chatToggle" aria-label="Toggle chat">&#x1f4ac;</button>
+  <div id="chatHeader">AI Assistant</div>
+  <div id="chatMessages"></div>
+  <div id="chatInputWrap">
+    <input id="chatInput" type="text" placeholder="Ask the AI..." autocomplete="off">
+    <button id="chatSend">Send</button>
+  </div>
+</div>
+
+<!-- Notification -->
+<div id="notification"></div>
+
+<!-- Completion Screen -->
+<div id="completionScreen">
+  <h2>All Chests Found!</h2>
+  <p>You explored every corner of the world. Well done, pilot!</p>
+  <button id="restartBtn">Fly Again</button>
+</div>
+
+<!-- Touch Controls -->
+<div id="touchControls">
+  <div class="touch-row">
+    <div class="touch-btn" data-key="up">&#x25B2;</div>
+  </div>
+  <div class="touch-row">
+    <div class="touch-btn" data-key="left">&#x25C0;</div>
+    <div class="touch-btn" data-key="down">&#x25BC;</div>
+    <div class="touch-btn" data-key="right">&#x25B6;</div>
+  </div>
+  <div class="touch-row">
+    <div class="touch-btn" data-key="space">&#x2191;</div>
+    <div class="touch-btn" data-key="shift">&#x2193;</div>
+  </div>
+</div>
+
+<script src="./three.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ─── Globals ─── */
+var game = {
+  renderer: null, scene: null, camera: null,
+  started: false, chestsCollected: 0, totalChests: 12,
+  chests: [], clouds: [], dynamicObjects: [],
+  velocity: new THREE.Vector3(),
+  keys: {},
+  speed: 0.5, maxSpeed: 1.8, accel: 0.04, friction: 0.97,
+  yaw: 0, pitch: 0, roll: 0,
+  clock: new THREE.Clock()
+};
+
+/* ─── LLM Callback System ─── */
+window.__fpv_llmCallbacks = {};
+window.__fpv_llmCallback = function(id, result) {
+  var cb = window.__fpv_llmCallbacks[id];
+  if (cb) { delete window.__fpv_llmCallbacks[id]; cb(result); }
+};
+
+/* ─── DOM Refs ─── */
+var $canvasWrap    = document.getElementById('canvasWrap');
+var $startScreen   = document.getElementById('startScreen');
+var $startBtn      = document.getElementById('startBtn');
+var $hud           = document.getElementById('hud');
+var $hudSpeed      = document.getElementById('hudSpeed');
+var $hudAlt        = document.getElementById('hudAlt');
+var $hudChests     = document.getElementById('hudChests');
+var $chatPanel     = document.getElementById('chatPanel');
+var $chatToggle    = document.getElementById('chatToggle');
+var $chatMessages  = document.getElementById('chatMessages');
+var $chatInput     = document.getElementById('chatInput');
+var $chatSend      = document.getElementById('chatSend');
+var $notification  = document.getElementById('notification');
+var $completion    = document.getElementById('completionScreen');
+var $restartBtn    = document.getElementById('restartBtn');
+var $touchControls = document.getElementById('touchControls');
+
+/* ─── Helpers ─── */
+function notify(text, duration) {
+  duration = duration || 2000;
+  $notification.textContent = text;
+  $notification.classList.add('show');
+  setTimeout(function(){ $notification.classList.remove('show'); }, duration);
+}
+
+function isMobile() {
+  return /Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent) || ('ontouchstart' in window);
+}
+
+/* ─── Init Scene ─── */
+function initScene() {
+  try {
+    // Renderer
+    game.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    game.renderer.setSize(window.innerWidth, window.innerHeight);
+    game.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    game.renderer.shadowMap.enabled = true;
+    game.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    game.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    game.renderer.toneMappingExposure = 1.1;
+    $canvasWrap.appendChild(game.renderer.domElement);
+
+    // Scene
+    game.scene = new THREE.Scene();
+    game.scene.fog = new THREE.FogExp2(0x87CEEB, 0.0018);
+
+    // Camera
+    game.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.5, 2000);
+    game.camera.position.set(0, 25, 0);
+    game.camera.lookAt(0, 25, -100);
+
+    // Sky
+    var skyGeo = new THREE.SphereGeometry(900, 32, 32);
+    var skyMat = new THREE.ShaderMaterial({
+      uniforms: {
+        topColor: { value: new THREE.Color(0x0055aa) },
+        bottomColor: { value: new THREE.Color(0x87CEEB) },
+        offset: { value: 20 },
+        exponent: { value: 0.5 }
+      },
+      vertexShader: [
+        'varying vec3 vWorldPosition;',
+        'void main(){',
+        '  vec4 wp=modelMatrix*vec4(position,1.0);',
+        '  vWorldPosition=wp.xyz;',
+        '  gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 topColor;',
+        'uniform vec3 bottomColor;',
+        'uniform float offset;',
+        'uniform float exponent;',
+        'varying vec3 vWorldPosition;',
+        'void main(){',
+        '  float h=normalize(vWorldPosition+offset).y;',
+        '  gl_FragColor=vec4(mix(bottomColor,topColor,max(pow(max(h,0.0),exponent),0.0)),1.0);',
+        '}'
+      ].join('\n'),
+      side: THREE.BackSide
+    });
+    game.scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+    // Lights
+    var sun = new THREE.DirectionalLight(0xfff5e0, 1.4);
+    sun.position.set(200, 300, 100);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 800;
+    sun.shadow.camera.left = -300;
+    sun.shadow.camera.right = 300;
+    sun.shadow.camera.top = 300;
+    sun.shadow.camera.bottom = -300;
+    game.scene.add(sun);
+    game.scene.add(new THREE.AmbientLight(0x6688cc, 0.5));
+    game.scene.add(new THREE.HemisphereLight(0x88bbff, 0x445522, 0.4));
+
+    // Ground with terrain
+    var groundGeo = new THREE.PlaneGeometry(1600, 1600, 128, 128);
+    groundGeo.rotateX(-Math.PI / 2);
+    var verts = groundGeo.attributes.position;
+    for (var i = 0; i < verts.count; i++) {
+      var x = verts.getX(i);
+      var z = verts.getZ(i);
+      var h = Math.sin(x * 0.008) * Math.cos(z * 0.006) * 12
+            + Math.sin(x * 0.02 + 1.5) * Math.cos(z * 0.015) * 4
+            + Math.sin(x * 0.05) * Math.cos(z * 0.04) * 1.5;
+      verts.setY(i, h);
+    }
+    groundGeo.computeVertexNormals();
+    var groundMat = new THREE.MeshStandardMaterial({
+      color: 0x3a7d32, roughness: 0.9, metalness: 0.0, flatShading: true
+    });
+    var ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.receiveShadow = true;
+    game.scene.add(ground);
+
+    // Water
+    var waterGeo = new THREE.PlaneGeometry(300, 250, 1, 1);
+    waterGeo.rotateX(-Math.PI / 2);
+    var waterMat = new THREE.MeshStandardMaterial({
+      color: 0x2288cc, transparent: true, opacity: 0.7,
+      roughness: 0.1, metalness: 0.3
+    });
+    var water = new THREE.Mesh(waterGeo, waterMat);
+    water.position.set(120, 2, -80);
+    game.scene.add(water);
+
+    // Trees (80)
+    for (var t = 0; t < 80; t++) {
+      var tx = (Math.random() - 0.5) * 1200;
+      var tz = (Math.random() - 0.5) * 1200;
+      // Keep away from water
+      if (tx > 0 && tx < 280 && tz > -210 && tz < 50) continue;
+      var tGroup = new THREE.Group();
+      // Trunk
+      var trunkH = 3 + Math.random() * 4;
+      var trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.5, trunkH, 6),
+        new THREE.MeshStandardMaterial({ color: 0x6B4226, roughness: 0.9 })
+      );
+      trunk.position.y = trunkH / 2;
+      trunk.castShadow = true;
+      tGroup.add(trunk);
+      // Foliage layers
+      var layers = 2 + Math.floor(Math.random() * 2);
+      for (var l = 0; l < layers; l++) {
+        var fSize = 2.8 - l * 0.6 + Math.random() * 0.5;
+        var foliage = new THREE.Mesh(
+          new THREE.ConeGeometry(fSize, 3 + Math.random(), 7),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.28 + Math.random() * 0.06, 0.6, 0.28 + Math.random() * 0.1), flatShading: true })
+        );
+        foliage.position.y = trunkH + l * 2;
+        foliage.castShadow = true;
+        tGroup.add(foliage);
+      }
+      tGroup.position.set(tx, getTerrainHeight(tx, tz), tz);
+      game.scene.add(tGroup);
+    }
+
+    // Mountains (4)
+    var mtns = [
+      { x: -200, z: -250, s: 80, h: 100 },
+      { x: 250,  z: -300, s: 100, h: 130 },
+      { x: -350, z: 200,  s: 70,  h: 90 },
+      { x: 400,  z: 250,  s: 90,  h: 110 }
+    ];
+    mtns.forEach(function(m) {
+      var mGroup = new THREE.Group();
+      var mGeo = new THREE.ConeGeometry(m.s, m.h, 8, 4);
+      var mMat = new THREE.MeshStandardMaterial({ color: 0x6B705C, flatShading: true, roughness: 0.95 });
+      var mMesh = new THREE.Mesh(mGeo, mMat);
+      mMesh.position.y = m.h / 2;
+      mMesh.castShadow = true;
+      mGroup.add(mMesh);
+      // Snow cap
+      var snowGeo = new THREE.ConeGeometry(m.s * 0.3, m.h * 0.25, 8);
+      var snowMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, flatShading: true, roughness: 0.6 });
+      var snow = new THREE.Mesh(snowGeo, snowMat);
+      snow.position.y = m.h * 0.8;
+      mGroup.add(snow);
+      mGroup.position.set(m.x, 0, m.z);
+      game.scene.add(mGroup);
+    });
+
+    // Houses (3)
+    var houses = [
+      { x: -60, z: 50 },
+      { x: 80,  z: 120 },
+      { x: -180, z: -100 }
+    ];
+    houses.forEach(function(h) {
+      var hGroup = new THREE.Group();
+      // Body
+      var body = new THREE.Mesh(
+        new THREE.BoxGeometry(8, 6, 10),
+        new THREE.MeshStandardMaterial({ color: 0xD4A574, roughness: 0.8 })
+      );
+      body.position.y = 3;
+      body.castShadow = true;
+      body.receiveShadow = true;
+      hGroup.add(body);
+      // Roof
+      var roof = new THREE.Mesh(
+        new THREE.ConeGeometry(7, 4, 4),
+        new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 })
+      );
+      roof.position.y = 8;
+      roof.rotation.y = Math.PI / 4;
+      roof.castShadow = true;
+      hGroup.add(roof);
+      // Door
+      var door = new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 3.5),
+        new THREE.MeshStandardMaterial({ color: 0x4a2f1a })
+      );
+      door.position.set(0, 1.75, 5.01);
+      hGroup.add(door);
+      // Window
+      var win = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.5, 1.5),
+        new THREE.MeshStandardMaterial({ color: 0x88ccff, emissive: 0x446688, emissiveIntensity: 0.3 })
+      );
+      win.position.set(2, 4, 5.01);
+      hGroup.add(win);
+      var win2 = win.clone();
+      win2.position.x = -2;
+      hGroup.add(win2);
+      hGroup.position.set(h.x, getTerrainHeight(h.x, h.z), h.z);
+      game.scene.add(hGroup);
+    });
+
+    // Chests (12)
+    var chestPositions = [
+      {x:-50, z:30}, {x:70, z:-60}, {x:-150, z:150},
+      {x:200, z:-200}, {x:-300, z:-150}, {x:350, z:100},
+      {x:-100, z:-250}, {x:0, z:200}, {x:-250, z:50},
+      {x:150, z:250}, {x:-400, z:-50}, {x:300, z:-50}
+    ];
+    chestPositions.forEach(function(cp, idx) {
+      var cGroup = new THREE.Group();
+      // Chest body
+      var cBody = new THREE.Mesh(
+        new THREE.BoxGeometry(2, 1.5, 1.5),
+        new THREE.MeshStandardMaterial({ color: 0xDAA520, metalness: 0.5, roughness: 0.3 })
+      );
+      cBody.position.y = 0.75;
+      cBody.castShadow = true;
+      cGroup.add(cBody);
+      // Lid
+      var cLid = new THREE.Mesh(
+        new THREE.BoxGeometry(2.1, 0.4, 1.6),
+        new THREE.MeshStandardMaterial({ color: 0xB8860B, metalness: 0.5, roughness: 0.3 })
+      );
+      cLid.position.y = 1.7;
+      cGroup.add(cLid);
+      // Lock
+      var lock = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.3, 0.2),
+        new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.8, roughness: 0.1 })
+      );
+      lock.position.set(0, 1.3, 0.76);
+      cGroup.add(lock);
+      // Glow
+      var glow = new THREE.PointLight(0xFFD700, 1.5, 20);
+      glow.position.y = 2;
+      cGroup.add(glow);
+      // Glow ring
+      var ringGeo = new THREE.TorusGeometry(2, 0.08, 8, 32);
+      var ringMat = new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.4 });
+      var ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.1;
+      cGroup.add(ring);
+
+      var cy = getTerrainHeight(cp.x, cp.z);
+      cGroup.position.set(cp.x, cy, cp.z);
+      cGroup.userData = { collected: false, index: idx, ring: ring, glow: glow };
+      game.chests.push(cGroup);
+      game.scene.add(cGroup);
+    });
+
+    // Clouds (15)
+    for (var c = 0; c < 15; c++) {
+      var clGroup = new THREE.Group();
+      var numPuffs = 3 + Math.floor(Math.random() * 4);
+      for (var p = 0; p < numPuffs; p++) {
+        var puffSize = 8 + Math.random() * 15;
+        var puff = new THREE.Mesh(
+          new THREE.SphereGeometry(puffSize, 8, 6),
+          new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, roughness: 1 })
+        );
+        puff.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 10);
+        puff.scale.y = 0.4 + Math.random() * 0.3;
+        clGroup.add(puff);
+      }
+      clGroup.position.set(
+        (Math.random() - 0.5) * 1400,
+        80 + Math.random() * 80,
+        (Math.random() - 0.5) * 1400
+      );
+      clGroup.userData = { speed: 0.02 + Math.random() * 0.05, origX: clGroup.position.x };
+      game.clouds.push(clGroup);
+      game.scene.add(clGroup);
+    }
+
+  } catch(e) {
+    console.error('initScene error:', e);
+    $canvasWrap.innerHTML = '<div style="color:#fff;padding:20px;font-size:1.1rem;"><h3>Scene init error</h3><p>' + e.message + '</p></div>';
+  }
+}
+
+function getTerrainHeight(x, z) {
+  return Math.sin(x * 0.008) * Math.cos(z * 0.006) * 12
+       + Math.sin(x * 0.02 + 1.5) * Math.cos(z * 0.015) * 4
+       + Math.sin(x * 0.05) * Math.cos(z * 0.04) * 1.5;
+}
+
+/* ─── Animate ─── */
+function animate() {
+  requestAnimationFrame(animate);
+  if (!game.renderer || !game.scene || !game.camera) return;
+  if (!game.started) return;
+
+  var dt = game.clock.getDelta();
+  var k = game.keys;
+  var sp = game.speed;
+
+  // Acceleration
+  if (k['w'] || k['arrowup'])    sp = Math.min(sp + game.accel, game.maxSpeed);
+  else if (k['s'] || k['arrowdown']) sp = Math.max(sp - game.accel * 0.5, 0.05);
+  else sp *= game.friction;
+  if (sp < 0.05) sp = 0.05;
+  game.speed = sp;
+
+  // Turning
+  var turnRate = 0.025;
+  if (k['a'] || k['arrowleft'])  game.yaw += turnRate * sp * 2;
+  if (k['d'] || k['arrowright']) game.yaw -= turnRate * sp * 2;
+
+  // Pitch & vertical
+  if (k[' '])     game.velocity.y += 0.08;
+  if (k['shift']) game.velocity.y -= 0.08;
+  game.velocity.y *= 0.94;
+  if (k['w'] || k['arrowup'])    game.pitch = THREE.MathUtils.lerp(game.pitch, -0.15, 0.03);
+  else if (k['s'] || k['arrowdown']) game.pitch = THREE.MathUtils.lerp(game.pitch, 0.15, 0.03);
+  else game.pitch *= 0.95;
+
+  // Roll visual
+  var targetRoll = 0;
+  if (k['a'] || k['arrowleft']) targetRoll = 0.3;
+  if (k['d'] || k['arrowright']) targetRoll = -0.3;
+  game.roll = THREE.MathUtils.lerp(game.roll, targetRoll, 0.05);
+
+  // Move camera
+  var dir = new THREE.Vector3(0, 0, -1);
+  dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), game.yaw);
+  game.camera.position.addScaledVector(dir, sp);
+  game.camera.position.y += game.velocity.y;
+
+  // Clamp altitude
+  var terrH = getTerrainHeight(game.camera.position.x, game.camera.position.z);
+  if (game.camera.position.y < terrH + 3) {
+    game.camera.position.y = terrH + 3;
+    game.velocity.y = Math.max(game.velocity.y, 0);
+  }
+  if (game.camera.position.y > 200) game.camera.position.y = 200;
+
+  // Camera look direction
+  var lookDir = new THREE.Vector3(0, 0, -1);
+  lookDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), game.pitch);
+  lookDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), game.yaw);
+  var lookTarget = game.camera.position.clone().add(lookDir);
+  game.camera.lookAt(lookTarget);
+  game.camera.rotation.z = game.roll;
+
+  // Animate clouds
+  game.clouds.forEach(function(cl) {
+    cl.position.x += cl.userData.speed;
+    if (cl.position.x > cl.userData.origX + 200) cl.position.x = cl.userData.origX - 200;
+  });
+
+  // Animate chests
+  var camPos = game.camera.position;
+  game.chests.forEach(function(ch) {
+    if (ch.userData.collected) return;
+    ch.userData.ring.rotation.z += 0.02;
+    ch.userData.glow.intensity = 1.2 + Math.sin(Date.now() * 0.005) * 0.5;
+    // Check collection
+    var dist = camPos.distanceTo(ch.position);
+    if (dist < 5) {
+      ch.userData.collected = true;
+      game.scene.remove(ch);
+      game.chestsCollected++;
+      notify('Chest found! (' + game.chestsCollected + '/' + game.totalChests + ')');
+      if (game.chestsCollected >= game.totalChests) {
+        setTimeout(function(){ $completion.classList.add('visible'); }, 1000);
+      }
+    }
+  });
+
+  // HUD
+  $hudSpeed.textContent = (sp * 100).toFixed(0);
+  $hudAlt.textContent = Math.max(0, game.camera.position.y - terrH).toFixed(0);
+  $hudChests.textContent = game.chestsCollected + '/' + game.totalChests;
+
+  game.renderer.render(game.scene, game.camera);
+}
+
+/* ─── Controls ─── */
+function setupControls() {
+  document.addEventListener('keydown', function(e) {
+    game.keys[e.key.toLowerCase()] = true;
+    if (e.key === ' ') e.preventDefault();
+  });
+  document.addEventListener('keyup', function(e) {
+    game.keys[e.key.toLowerCase()] = false;
+  });
+
+  // Touch
+  if (isMobile()) {
+    $touchControls.style.display = 'block';
+  }
+  $touchControls.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    handleTouchKey(e.target, true);
+  }, { passive: false });
+  $touchControls.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    handleTouchKey(e.target, false);
+  }, { passive: false });
+  $touchControls.addEventListener('touchcancel', function(e) {
+    handleTouchKey(e.target, false);
+  });
+}
+
+function handleTouchKey(el, state) {
+  if (!el || !el.dataset.key) return;
+  var keyMap = {
+    'up': 'w', 'down': 's', 'left': 'a', 'right': 'd',
+    'space': ' ', 'shift': 'shift'
+  };
+  var k = keyMap[el.dataset.key];
+  if (k) game.keys[k] = state;
+}
+
+/* ─── Chat System ─── */
+function toggleChat() {
+  $chatPanel.classList.toggle('open');
+}
+
+function addMsg(text, type) {
+  type = type || 'bot';
+  var div = document.createElement('div');
+  div.className = 'msg ' + type;
+  div.textContent = text;
+  $chatMessages.appendChild(div);
+  // JS transition instead of CSS animation
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      div.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      div.style.opacity = '1';
+      div.style.transform = 'translateY(0)';
+    });
+  });
+  // Scroll with rAF for smooth behavior
+  requestAnimationFrame(function() {
+    $chatMessages.scrollTop = $chatMessages.scrollHeight;
+  });
+}
+
+function sendChat() {
+  var text = $chatInput.value.trim();
+  if (!text) return;
+  $chatInput.value = '';
+  addMsg(text, 'user');
+
+  if (window.AndroidBridge && typeof window.AndroidBridge.callLLM === 'function') {
+    addMsg('Thinking...', 'system');
+    var cbId = 'fpv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    window.__fpv_llmCallbacks[cbId] = function(result) {
+      handleLLMResponse(result);
+    };
+    try {
+      window.AndroidBridge.callLLM(text, cbId);
+    } catch(e) {
+      addMsg('Bridge error: ' + e.message, 'system');
+    }
+  } else {
+    addMsg('AI bridge not available. Running in standalone mode.', 'system');
+    // Try to parse as tool command locally
+    tryLocalCommand(text);
+  }
+}
+
+function handleLLMResponse(result) {
+  try {
+    var parsed = typeof result === 'string' ? JSON.parse(result) : result;
+    if (parsed.toolCall) {
+      executeTool(parsed.toolCall.name, parsed.toolCall.args);
+    }
+    if (parsed.reply) {
+      addMsg(parsed.reply, 'bot');
+    }
+  } catch(e) {
+    if (typeof result === 'string') {
+      addMsg(result, 'bot');
+    } else {
+      addMsg('Error parsing response.', 'system');
+    }
+  }
+}
+
+function tryLocalCommand(text) {
+  var cmd = text.toLowerCase().trim();
+  if (cmd.indexOf('add tree') >= 0 || cmd.indexOf('plant') >= 0) {
+    executeTool('addTree', {});
+    addMsg('Planted a tree nearby!', 'bot');
+  } else if (cmd.indexOf('add rock') >= 0 || cmd.indexOf('rock') >= 0) {
+    executeTool('addRock', {});
+    addMsg('Placed a rock!', 'bot');
+  } else if (cmd.indexOf('add cloud') >= 0 || cmd.indexOf('cloud') >= 0) {
+    executeTool('addCloud', {});
+    addMsg('Summoned a cloud!', 'bot');
+  } else if (cmd.indexOf('add house') >= 0 || cmd.indexOf('house') >= 0) {
+    executeTool('addHouseBody', {});
+    addMsg('Built a house!', 'bot');
+  } else if (cmd.indexOf('add flower') >= 0 || cmd.indexOf('flower') >= 0) {
+    executeTool('addFlower', {});
+    addMsg('Planted flowers!', 'bot');
+  } else if (cmd.indexOf('add crate') >= 0 || cmd.indexOf('crate') >= 0) {
+    executeTool('addCrate', {});
+    addMsg('Placed a crate!', 'bot');
+  } else if (cmd.indexOf('add sign') >= 0 || cmd.indexOf('sign') >= 0) {
+    executeTool('addSign', {});
+    addMsg('Placed a sign!', 'bot');
+  } else if (cmd.indexOf('add lamp') >= 0 || cmd.indexOf('lamp') >= 0) {
+    executeTool('addLamp', {});
+    addMsg('Installed a lamp!', 'bot');
+  } else if (cmd.indexOf('clear') >= 0 || cmd.indexOf('remove all') >= 0) {
+    executeTool('clearDynamicObjects', {});
+    addMsg('Cleared all dynamic objects.', 'bot');
+  } else if (cmd.indexOf('code') >= 0 || cmd.indexOf('sphere') >= 0 || cmd.indexOf('cube') >= 0 || cmd.indexOf('cylinder') >= 0 || cmd.indexOf('cone') >= 0 || cmd.indexOf('torus') >= 0) {
+    addMsg('In standalone mode, try: "add tree", "add rock", "add cloud", "add house", "add flower", "add crate", "add sign", "add lamp", "clear".', 'bot');
+  } else {
+    addMsg('I can add objects to the world! Try: "add tree", "add rock", "add cloud", "add house", "add flower", "add crate", "add sign", "add lamp", "clear".', 'bot');
+  }
+}
+
+/* ─── Tool Execution ─── */
+function executeTool(name, args) {
+  // Normalize args: could be string (JSON) or already object
+  if (typeof args === 'string') {
+    try { args = JSON.parse(args); } catch(e) { args = {}; }
+  }
+  if (!args || typeof args !== 'object') args = {};
+  if (!game.scene) return;
+
+  var pos = args.position || null;
+  if (!pos) {
+    // Place near camera
+    var fwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), game.yaw);
+    pos = {
+      x: game.camera.position.x + fwd.x * 30 + (Math.random() - 0.5) * 20,
+      z: game.camera.position.z + fwd.z * 30 + (Math.random() - 0.5) * 20
+    };
+  }
+  var px = pos.x || 0;
+  var pz = pos.z || 0;
+  var py = args.y !== undefined ? args.y : getTerrainHeight(px, pz);
+  var obj = null;
+
+  switch(name) {
+    case 'addTree': obj = createTree(px, py, pz, args); break;
+    case 'addRock': obj = createRock(px, py, pz, args); break;
+    case 'addHouseBody': obj = createHouse(px, py, pz, args); break;
+    case 'addCloud': obj = createCloudObj(px, py, pz, args); break;
+    case 'addFlower': obj = createFlower(px, py, pz, args); break;
+    case 'addCrate': obj = createCrate(px, py, pz, args); break;
+    case 'addSign': obj = createSign(px, py, pz, args); break;
+    case 'addLamp': obj = createLamp(px, py, pz, args); break;
+    case 'executeCode': obj = executeCode(args); break;
+    case 'removeDynamic':
+      removeDynamic(args);
+      return;
+    case 'clearDynamicObjects':
+      clearDynamicObjects();
+      return;
+    default:
+      addMsg('Unknown tool: ' + name, 'system');
+      return;
+  }
+  if (obj) {
+    game.dynamicObjects.push(obj);
+    game.scene.add(obj);
+  }
+}
+
+function createTree(x, y, z, args) {
+  var g = new THREE.Group();
+  var s = args.scale || 1;
+  var trunkH = (3 + Math.random() * 4) * s;
+  var trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.3 * s, 0.5 * s, trunkH, 6),
+    new THREE.MeshStandardMaterial({ color: 0x6B4226, roughness: 0.9 })
+  );
+  trunk.position.y = trunkH / 2;
+  trunk.castShadow = true;
+  g.add(trunk);
+  var layers = 2 + Math.floor(Math.random() * 2);
+  for (var l = 0; l < layers; l++) {
+    var fSize = (2.8 - l * 0.6 + Math.random() * 0.5) * s;
+    var foliage = new THREE.Mesh(
+      new THREE.ConeGeometry(fSize, (3 + Math.random()) * s, 7),
+      new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.28 + Math.random() * 0.06, 0.6, 0.28 + Math.random() * 0.1), flatShading: true })
+    );
+    foliage.position.y = trunkH + l * 2 * s;
+    foliage.castShadow = true;
+    g.add(foliage);
+  }
+  g.position.set(x, y, z);
+  return g;
+}
+
+function createRock(x, y, z, args) {
+  var s = args.scale || (0.8 + Math.random() * 1.5);
+  var rock = new THREE.Mesh(
+    new THREE.DodecahedronGeometry(s, 1),
+    new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.95, flatShading: true })
+  );
+  rock.position.set(x, y + s * 0.4, z);
+  rock.rotation.set(Math.random(), Math.random(), Math.random());
+  rock.castShadow = true;
+  return rock;
+}
+
+function createHouse(x, y, z, args) {
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(
+    new THREE.BoxGeometry(8, 6, 10),
+    new THREE.MeshStandardMaterial({ color: 0xD4A574, roughness: 0.8 })
+  );
+  body.position.y = 3; body.castShadow = true; body.receiveShadow = true;
+  g.add(body);
+  var roof = new THREE.Mesh(
+    new THREE.ConeGeometry(7, 4, 4),
+    new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 })
+  );
+  roof.position.y = 8; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
+  g.add(roof);
+  g.position.set(x, y, z);
+  return g;
+}
+
+function createCloudObj(x, y, z, args) {
+  var g = new THREE.Group();
+  var puffs = 3 + Math.floor(Math.random() * 4);
+  for (var p = 0; p < puffs; p++) {
+    var puffSize = 8 + Math.random() * 15;
+    var puff = new THREE.Mesh(
+      new THREE.SphereGeometry(puffSize, 8, 6),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, roughness: 1 })
+    );
+    puff.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 10);
+    puff.scale.y = 0.4 + Math.random() * 0.3;
+    g.add(puff);
+  }
+  g.position.set(x, Math.max(y, 60), z);
+  g.userData = { speed: 0.02 + Math.random() * 0.05, origX: x };
+  game.clouds.push(g);
+  return g;
+}
+
+function createFlower(x, y, z, args) {
+  var g = new THREE.Group();
+  var count = args.count || (5 + Math.floor(Math.random() * 8));
+  var colors = [0xff4466, 0xff88aa, 0xffaa44, 0xffff44, 0xaa44ff, 0xff66cc];
+  for (var i = 0; i < count; i++) {
+    var fGroup = new THREE.Group();
+    var stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.04, 0.5, 4),
+      new THREE.MeshStandardMaterial({ color: 0x2d6b22 })
+    );
+    stem.position.y = 0.25;
+    fGroup.add(stem);
+    var petal = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 6, 4),
+      new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
+    );
+    petal.position.y = 0.55;
+    petal.scale.y = 0.6;
+    fGroup.add(petal);
+    fGroup.position.set(
+      (Math.random() - 0.5) * 6,
+      0,
+      (Math.random() - 0.5) * 6
+    );
+    g.add(fGroup);
+  }
+  g.position.set(x, y, z);
+  return g;
+}
+
+function createCrate(x, y, z, args) {
+  var s = args.scale || 1;
+  var crate = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5 * s, 1.5 * s, 1.5 * s),
+    new THREE.MeshStandardMaterial({ color: 0xA0722A, roughness: 0.85 })
+  );
+  crate.position.set(x, y + 0.75 * s, z);
+  crate.castShadow = true;
+  // Cross planks
+  var plank1 = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6 * s, 0.08 * s, 0.08 * s),
+    new THREE.MeshStandardMaterial({ color: 0x7a5518 })
+  );
+  plank1.position.set(0, 0, 0.76 * s);
+  crate.add(plank1);
+  var plank2 = plank1.clone();
+  plank2.rotation.z = Math.PI / 2;
+  crate.add(plank2);
+  return crate;
+}
+
+function createSign(x, y, z, args) {
+  var g = new THREE.Group();
+  var post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.1, 3, 6),
+    new THREE.MeshStandardMaterial({ color: 0x6B4226 })
+  );
+  post.position.y = 1.5;
+  post.castShadow = true;
+  g.add(post);
+  var board = new THREE.Mesh(
+    new THREE.BoxGeometry(2.5, 1.2, 0.15),
+    new THREE.MeshStandardMaterial({ color: 0xDEB887 })
+  );
+  board.position.y = 3;
+  board.castShadow = true;
+  g.add(board);
+  var text = args.text || 'Welcome!';
+  var canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 128;
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#DEB887';
+  ctx.fillRect(0, 0, 256, 128);
+  ctx.fillStyle = '#4a2f1a';
+  ctx.font = 'bold 28px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 128, 64);
+  var tex = new THREE.CanvasTexture(canvas);
+  var label = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 1.1),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+  );
+  label.position.set(0, 3, 0.08);
+  g.add(label);
+  g.position.set(x, y, z);
+  return g;
+}
+
+function createLamp(x, y, z, args) {
+  var g = new THREE.Group();
+  var pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.1, 4, 6),
+    new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 })
+  );
+  pole.position.y = 2;
+  pole.castShadow = true;
+  g.add(pole);
+  var bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.25, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0xffffcc, emissive: 0xffee88, emissiveIntensity: 1.5 })
+  );
+  bulb.position.y = 4.2;
+  g.add(bulb);
+  var light = new THREE.PointLight(0xffee88, 1, 30);
+  light.position.y = 4.2;
+  g.add(light);
+  g.position.set(x, y, z);
+  return g;
+}
+
+function executeCode(args) {
+  // args: { shape: 'box'|'sphere'|'cylinder'|'cone'|'torus', position:{x,z}, scale, color }
+  var shape = (args.shape || 'box').toLowerCase();
+  var px = args.position ? args.position.x : game.camera.position.x;
+  var pz = args.position ? args.position.z : game.camera.position.z;
+  var py = args.y !== undefined ? args.y : getTerrainHeight(px, pz) + 2;
+  var s = args.scale || 2;
+  var col = args.color || 0x4a7cc9;
+  var geo;
+  switch(shape) {
+    case 'box': geo = new THREE.BoxGeometry(s, s, s); break;
+    case 'sphere': geo = new THREE.SphereGeometry(s * 0.6, 16, 16); break;
+    case 'cylinder': geo = new THREE.CylinderGeometry(s * 0.5, s * 0.5, s, 12); break;
+    case 'cone': geo = new THREE.ConeGeometry(s * 0.6, s * 1.5, 12); break;
+    case 'torus': geo = new THREE.TorusGeometry(s * 0.6, s * 0.2, 12, 24); break;
+    default: geo = new THREE.BoxGeometry(s, s, s);
+  }
+  var mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.5, metalness: 0.3 });
+  var mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(px, py, pz);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function removeDynamic(args) {
+  if (typeof args === 'string') { try { args = JSON.parse(args); } catch(e) { args = {}; } }
+  var idx = args.index;
+  if (typeof idx === 'number' && idx >= 0 && idx < game.dynamicObjects.length) {
+    var obj = game.dynamicObjects[idx];
+    game.scene.remove(obj);
+    game.dynamicObjects.splice(idx, 1);
+  }
+}
+
+function clearDynamicObjects() {
+  game.dynamicObjects.forEach(function(obj) {
+    game.scene.remove(obj);
+  });
+  game.dynamicObjects = [];
+}
+
+/* ─── Start / Restart ─── */
+function startGame() {
+  $startScreen.classList.add('hidden');
+  $hud.classList.add('visible');
+  game.started = true;
+  game.clock.start();
+  addMsg('Welcome to FPV Sky Explorer! Fly around and collect all 12 golden chests. Use WASD to fly, Space/Shift for up/down. Ask me to add objects!', 'bot');
+}
+
+function restartGame() {
+  $completion.classList.remove('visible');
+  game.chestsCollected = 0;
+  game.speed = 0.5;
+  game.yaw = 0; game.pitch = 0; game.roll = 0;
+  game.velocity.set(0, 0, 0);
+  game.camera.position.set(0, 25, 0);
+  game.camera.lookAt(0, 25, -100);
+  clearDynamicObjects();
+  // Re-add chests
+  game.chests.forEach(function(ch) {
+    if (ch.userData.collected) {
+      ch.userData.collected = false;
+      game.scene.add(ch);
+    }
+  });
+}
+
+/* ─── Resize ─── */
+function onResize() {
+  if (!game.renderer || !game.camera) return;
+  game.camera.aspect = window.innerWidth / window.innerHeight;
+  game.camera.updateProjectionMatrix();
+  game.renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+/* ─── Init ─── */
+function init() {
+  initScene();
+  setupControls();
+  animate();
+
+  $startBtn.addEventListener('click', startGame);
+  $restartBtn.addEventListener('click', restartGame);
+  $chatToggle.addEventListener('click', toggleChat);
+  $chatSend.addEventListener('click', sendChat);
+  $chatInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') sendChat();
+    e.stopPropagation(); // prevent flight controls
+  });
+  $chatInput.addEventListener('keyup', function(e) {
+    e.stopPropagation();
+  });
+  window.addEventListener('resize', onResize);
+
+  // Prevent default touch behavior on canvas
+  $canvasWrap.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+}
+
+init();
+
+})();
+</script>
+</body>
+</html>

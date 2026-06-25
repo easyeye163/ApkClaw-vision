@@ -292,6 +292,14 @@
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- FPV 3D飞行探索 -->
+        <activity
+            android:name=".ui.fpv.FPVGameActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.ApkClaw" />
+
         <!-- 屏幕流 + 监控 -->
         <activity
             android:name=".ui.camera.ScreenStreamActivity"
