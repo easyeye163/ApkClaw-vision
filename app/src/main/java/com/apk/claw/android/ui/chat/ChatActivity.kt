@@ -136,6 +136,9 @@ class ChatActivity : BaseActivity() {
     private var scenarioSystemPrompt: String? = null
     private var scenarioName: String? = null
 
+    // 智能滚动：流式输出时，如果用户手动上翻，则停止自动滚动到底部
+    private var userScrolledUp = false
+
     // Screenshot permission is handled by ScreenshotPermissionActivity
 
     private val imagePickerLauncher = registerForActivityResult(
@@ -240,6 +243,19 @@ class ChatActivity : BaseActivity() {
         rvMessages.layoutManager = LinearLayoutManager(this)
         // 禁用 ItemAnimator 防止流式输出时每个 token 触发淡入淡出动画导致闪烁
         rvMessages.itemAnimator = null
+        // 智能滚动监听：用户上翻时暂停自动滚动，滚回底部时恢复
+        rvMessages.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                super.onScrolled(recyclerView, dx, dy)
+                val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+                val lastVisible = lm.findLastCompletelyVisibleItemPosition()
+                if (dy < 0) {
+                    userScrolledUp = true
+                } else if (lastVisible >= adapter.itemCount - 1) {
+                    userScrolledUp = false
+                }
+            }
+        })
 
         loadChatHistory()
 
@@ -1103,8 +1119,10 @@ class ChatActivity : BaseActivity() {
                             // 流式输出时实时过滤  分析过程，用户不会看到思考内容
                             val display = stripThinkTags(sb.toString())
                             adapter.updateLastMessage(display.ifEmpty { getString(R.string.chat_local_model_generating) })
-                            // 流式期间用 scrollToPosition（瞬间定位），避免 smoothScroll 动画与新内容冲突导致上下跳动
-                            rvMessages.scrollToPosition(adapter.itemCount - 1)
+                            // 流式期间仅在用户未上翻时自动滚动
+                            if (!userScrolledUp) {
+                                rvMessages.scrollToPosition(adapter.itemCount - 1)
+                            }
                         }
                     }
                 }
@@ -1112,6 +1130,7 @@ class ChatActivity : BaseActivity() {
                 runOnUiThread {
                     val answer = stripThinkTags(sb.toString())
                     adapter.updateLastMessage(answer.ifEmpty { getString(R.string.chat_local_model_generating) })
+                    userScrolledUp = false
                     rvMessages.scrollToPosition(adapter.itemCount - 1)
                     persistChatHistory()
                     speakAnswer(answer)
@@ -1152,14 +1171,17 @@ class ChatActivity : BaseActivity() {
                         // 云端模式：更新最后一条消息（累积文本）
                         adapter.updateLastMessage(step)
                     }
-                    // 流式期间用 scrollToPosition 避免抖动
-                    rvMessages.scrollToPosition(adapter.itemCount - 1)
+                    // 流式期间仅在用户未上翻时自动滚动
+                    if (!userScrolledUp) {
+                        rvMessages.scrollToPosition(adapter.itemCount - 1)
+                    }
                 }
             }
 
             override fun onComplete(answer: String) {
                 runOnUiThread {
-                    // updateLastMessage 已包含最终文本，无需再添加
+                    userScrolledUp = false
+                    rvMessages.scrollToPosition(adapter.itemCount - 1)
                     persistChatHistory()
                     speakAnswer(answer)
                 }

@@ -681,6 +681,8 @@ function handleTouchKey(el, state) {
 }
 
 /* ─── Chat System ─── */
+var chatHistory = []; // {role:'user'|'assistant', content:string}
+
 function toggleChat() {
   $chatPanel.classList.toggle('open');
 }
@@ -709,6 +711,7 @@ function sendChat() {
   var text = $chatInput.value.trim();
   if (!text) return;
   $chatInput.value = '';
+  chatHistory.push({role:'user', content: text});
   addMsg(text, 'user');
 
   if (window.AndroidBridge && typeof window.AndroidBridge.callLLM === 'function') {
@@ -718,29 +721,69 @@ function sendChat() {
       handleLLMResponse(result);
     };
     try {
-      window.AndroidBridge.callLLM(text, cbId);
+      // 3 args: userMessage, historyJson, callbackId
+      window.AndroidBridge.callLLM(text, JSON.stringify(chatHistory), cbId);
     } catch(e) {
       addMsg('Bridge error: ' + e.message, 'system');
     }
   } else {
     addMsg('AI bridge not available. Running in standalone mode.', 'system');
-    // Try to parse as tool command locally
     tryLocalCommand(text);
   }
 }
 
+/** 语音悬浮窗回调入口 */
+window.__fpv_voiceInput = function(text) {
+  if (!text || !text.trim()) return;
+  // 自动打开聊天面板
+  if (!$chatPanel.classList.contains('open')) {
+    $chatPanel.classList.add('open');
+  }
+  chatHistory.push({role:'user', content: text});
+  addMsg(text, 'user');
+
+  if (window.AndroidBridge && typeof window.AndroidBridge.callLLM === 'function') {
+    addMsg('Thinking...', 'system');
+    var cbId = 'fpv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    window.__fpv_llmCallbacks[cbId] = function(result) {
+      handleLLMResponse(result);
+    };
+    try {
+      window.AndroidBridge.callLLM(text, JSON.stringify(chatHistory), cbId);
+    } catch(e) {
+      addMsg('Bridge error: ' + e.message, 'system');
+    }
+  } else {
+    addMsg('AI bridge not available.', 'system');
+    tryLocalCommand(text);
+  }
+};
+
 function handleLLMResponse(result) {
   try {
     var parsed = typeof result === 'string' ? JSON.parse(result) : result;
-    if (parsed.toolCall) {
-      executeTool(parsed.toolCall.name, parsed.toolCall.args);
+    if (parsed.error) {
+      addMsg(parsed.error, 'system');
+      return;
     }
-    if (parsed.reply) {
-      addMsg(parsed.reply, 'bot');
+    // Kotlin returns: {text: "...", toolCalls: [{name: "...", args: "..."}]}
+    var toolCalls = parsed.toolCalls;
+    if (toolCalls && toolCalls.length > 0) {
+      for (var i = 0; i < toolCalls.length; i++) {
+        var tc = toolCalls[i];
+        var args = {};
+        try { args = (typeof tc.args === 'string') ? JSON.parse(tc.args) : (tc.args || {}); } catch(e) { args = {}; }
+        executeTool(tc.name, args);
+      }
+    }
+    if (parsed.text) {
+      addMsg(parsed.text, 'bot');
+      chatHistory.push({role:'assistant', content: parsed.text});
     }
   } catch(e) {
     if (typeof result === 'string') {
       addMsg(result, 'bot');
+      chatHistory.push({role:'assistant', content: result});
     } else {
       addMsg('Error parsing response.', 'system');
     }
@@ -1066,7 +1109,7 @@ function startGame() {
   $hud.classList.add('visible');
   game.started = true;
   game.clock.start();
-  addMsg('Welcome to FPV Sky Explorer! Fly around and collect all 12 golden chests. Use WASD to fly, Space/Shift for up/down. Ask me to add objects!', 'bot');
+  addMsg('欢迎来到灵境！用 WASD 飞行，空格/Shift 上升下降。右下角打开AI助手，用文字或语音描述你想建造的场景。', 'bot');
 }
 
 function restartGame() {

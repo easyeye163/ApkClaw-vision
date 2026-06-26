@@ -17,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import com.apk.claw.android.agent.langchain.http.OkHttpClientBuilderAdapter
 import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.server.LocalWebServer
+import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import dev.langchain4j.agent.tool.ToolSpecification
@@ -152,6 +153,14 @@ class FPVGameActivity : BaseActivity() {
         webView = WebView(this)
         setContentView(webView)
         try { localServer = LocalWebServer(this, SERVER_PORT); localServer?.start() } catch (e: Exception) { XLog.e(TAG, "Server: ${e.message}") }
+
+        // 复用语音悬浮框：语音识别结果直接发送到 FPV 聊天面板
+        VoiceInteractionFloatWindow.onVoiceResultCallback = { voiceText ->
+            webView.evaluateJavascript(
+                "if(window.__fpv_voiceInput)window.__fpv_voiceInput('${voiceText.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","")}');",
+                null
+            )
+        }
         webView.settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true; allowFileAccess = false; allowContentAccess = false
             cacheMode = WebSettings.LOAD_NO_CACHE; mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -169,7 +178,7 @@ class FPVGameActivity : BaseActivity() {
 
     override fun isApplyStatusBarPadding() = false
     override fun getDesignWidth() = 1080
-    override fun onDestroy() { super.onDestroy(); localServer?.stop(); webView.destroy() }
+    override fun onDestroy() { super.onDestroy(); VoiceInteractionFloatWindow.onVoiceResultCallback = null; localServer?.stop(); webView.destroy() }
     override fun onBackPressed() { if (webView.canGoBack()) webView.goBack() }
 
     inner class FPVBridge {
