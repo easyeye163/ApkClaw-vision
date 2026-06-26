@@ -18,6 +18,7 @@ class ScenarioAdapter(
         val tvTitle: android.widget.TextView = itemView.findViewById(R.id.tvTitle)
         val tvDescription: android.widget.TextView = itemView.findViewById(R.id.tvDescription)
         val tvImageHint: android.widget.TextView = itemView.findViewById(R.id.tvImageHint)
+        val tvBottomHint: android.widget.TextView = itemView.findViewById(R.id.tvBottomHint)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -32,6 +33,13 @@ class ScenarioAdapter(
         holder.tvTitle.text = scenario.title
         holder.tvDescription.text = scenario.description
         holder.tvImageHint.visibility = if (scenario.supportsImage) android.view.View.VISIBLE else android.view.View.GONE
+
+        // FPV 游戏场景显示不同的底部提示
+        if (scenario.isFPVGame) {
+            holder.tvBottomHint.text = "点击开始飞行"
+        } else {
+            holder.tvBottomHint.text = "支持本地/远程模型"
+        }
 
         holder.itemView.setOnClickListener {
             onScenarioClick(scenario)

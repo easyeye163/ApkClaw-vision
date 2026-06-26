@@ -13,11 +13,20 @@ data class Scenario(
     val description: String,
     val tag: String,
     val iconRes: Int = 0,
-    val systemPrompt: String,
-    val supportsImage: Boolean = false
+    val systemPrompt: String = "",
+    val supportsImage: Boolean = false,
+    /** 特殊标记：如果为 true，点击此场景直接启动 FPVGameActivity 而非 ChatActivity */
+    val isFPVGame: Boolean = false
 ) {
     companion object {
         val ALL: List<Scenario> = listOf(
+            Scenario(
+                id = "fpv_lingjing",
+                title = "灵境 · 3D飞行探索",
+                description = "进入沉浸式3D飞行世界，穿越山川湖泊、雪山森林。支持AI语音对话，可用自然语言改变地形、添加建筑，打造属于你的奇幻世界。",
+                tag = "游戏",
+                isFPVGame = true
+            ),
             Scenario(
                 id = "voice_interaction",
                 title = "端侧实时语音交互",

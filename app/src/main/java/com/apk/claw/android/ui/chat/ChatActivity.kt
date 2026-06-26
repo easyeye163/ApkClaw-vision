@@ -1103,7 +1103,8 @@ class ChatActivity : BaseActivity() {
                             // 流式输出时实时过滤  分析过程，用户不会看到思考内容
                             val display = stripThinkTags(sb.toString())
                             adapter.updateLastMessage(display.ifEmpty { getString(R.string.chat_local_model_generating) })
-                            rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                            // 流式期间用 scrollToPosition（瞬间定位），避免 smoothScroll 动画与新内容冲突导致上下跳动
+                            rvMessages.scrollToPosition(adapter.itemCount - 1)
                         }
                     }
                 }
@@ -1111,7 +1112,7 @@ class ChatActivity : BaseActivity() {
                 runOnUiThread {
                     val answer = stripThinkTags(sb.toString())
                     adapter.updateLastMessage(answer.ifEmpty { getString(R.string.chat_local_model_generating) })
-                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                    rvMessages.scrollToPosition(adapter.itemCount - 1)
                     persistChatHistory()
                     speakAnswer(answer)
                 }
@@ -1151,7 +1152,8 @@ class ChatActivity : BaseActivity() {
                         // 云端模式：更新最后一条消息（累积文本）
                         adapter.updateLastMessage(step)
                     }
-                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                    // 流式期间用 scrollToPosition 避免抖动
+                    rvMessages.scrollToPosition(adapter.itemCount - 1)
                 }
             }
 

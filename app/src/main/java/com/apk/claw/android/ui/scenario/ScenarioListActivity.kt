@@ -8,6 +8,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.apk.claw.android.R
 import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.ui.chat.ChatActivity
+import com.apk.claw.android.ui.fpv.FPVGameActivity
 import com.apk.claw.android.widget.CommonToolbar
 
 /**
@@ -29,7 +30,12 @@ class ScenarioListActivity : BaseActivity() {
         val rv = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvScenarios)
         rv.layoutManager = LinearLayoutManager(this)
         rv.adapter = ScenarioAdapter(Scenario.ALL) { scenario ->
-            showModelChoiceDialog(scenario)
+            if (scenario.isFPVGame) {
+                // 灵境 FPV 飞行游戏：直接启动游戏，无需选择模型
+                startActivity(Intent(this, FPVGameActivity::class.java))
+            } else {
+                showModelChoiceDialog(scenario)
+            }
         }
     }
 
