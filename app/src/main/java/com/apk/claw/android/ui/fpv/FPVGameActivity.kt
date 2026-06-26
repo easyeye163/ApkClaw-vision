@@ -17,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import com.apk.claw.android.agent.langchain.http.OkHttpClientBuilderAdapter
 import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.server.LocalWebServer
+import com.apk.claw.android.base.BaseApp
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
