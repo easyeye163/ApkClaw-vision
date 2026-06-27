@@ -179,7 +179,7 @@ class FPVGameActivity : BaseActivity() {
 
     override fun isApplyStatusBarPadding() = false
     override fun getDesignWidth() = 1080
-    override fun onDestroy() { super.onDestroy(); VoiceInteractionFloatWindow.onVoiceResultCallback = null; localServer?.stop(); webView.destroy() }
+    override fun onDestroy() { super.onDestroy(); VoiceInteractionFloatWindow.onVoiceResultCallback = null; try { VoiceInteractionFloatWindow.dismiss() } catch (_: Exception) {}; localServer?.stop(); webView.destroy() }
     override fun onBackPressed() { if (webView.canGoBack()) webView.goBack() }
 
     inner class FPVBridge {
@@ -208,9 +208,26 @@ class FPVGameActivity : BaseActivity() {
         @JavascriptInterface fun getDeviceInfo() = JSONObject().apply { put("model",Build.MODEL); put("sdk",Build.VERSION.SDK_INT); put("width",resources.displayMetrics.widthPixels); put("height",resources.displayMetrics.heightPixels) }.toString()
         @JavascriptInterface fun exitGame() { runOnUiThread { finish() } }
         @JavascriptInterface fun vibrate(ms: Long) { try { val v = getSystemService(Vibrator::class.java); if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.O) v.vibrate(VibrationEffect.createOneShot(ms,VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") v.vibrate(ms) } catch (_:Exception) {} }
+        @JavascriptInterface
+        fun showVoiceFloat() {
+            runOnUiThread {
+                try {
+                    if (!VoiceInteractionFloatWindow.isShowing()) {
+                        VoiceInteractionFloatWindow.onVoiceResultCallback = { voiceText ->
+                            webView.evaluateJavascript(
+                                "if(window.__fpv_voiceInput)window.__fpv_voiceInput('${voiceText.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","")}');",
+                                null
+                            )
+                        }
+                        VoiceInteractionFloatWindow.show(application)
+                    }
+                } catch (e: Exception) { XLog.e(TAG, "showVoiceFloat: ${e.message}") }
+            }
+        }
     }
 
     private fun callJs(id: String, data: String) {
-        runOnUiThread { webView.evaluateJavascript("window.__fpv_llmCallback('$id','${data.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","")}');", null) }
+        val encoded = android.util.Base64.encodeToString(data.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        runOnUiThread { webView.evaluateJavascript("window.__fpv_llmCallback('$id', atob('$encoded'));", null) }
     }
 }

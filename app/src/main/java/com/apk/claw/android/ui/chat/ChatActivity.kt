@@ -1120,8 +1120,9 @@ class ChatActivity : BaseActivity() {
                             val display = stripThinkTags(sb.toString())
                             adapter.updateLastMessage(display.ifEmpty { getString(R.string.chat_local_model_generating) })
                             // 流式期间仅在用户未上翻时自动滚动
+                            // scrollBy(0,0) 触发重新布局适应内容增长，避免 scrollToPosition 跳动
                             if (!userScrolledUp) {
-                                rvMessages.scrollToPosition(adapter.itemCount - 1)
+                                rvMessages.scrollBy(0, 0)
                             }
                         }
                     }
@@ -1172,8 +1173,9 @@ class ChatActivity : BaseActivity() {
                         adapter.updateLastMessage(step)
                     }
                     // 流式期间仅在用户未上翻时自动滚动
+                    // scrollBy(0,0) 触发重新布局适应内容增长，避免 scrollToPosition 跳动
                     if (!userScrolledUp) {
-                        rvMessages.scrollToPosition(adapter.itemCount - 1)
+                        rvMessages.scrollBy(0, 0)
                     }
                 }
             }

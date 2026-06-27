@@ -762,11 +762,7 @@ window.__fpv_voiceInput = function(text) {
 function handleLLMResponse(result) {
   try {
     var parsed = typeof result === 'string' ? JSON.parse(result) : result;
-    if (parsed.error) {
-      addMsg(parsed.error, 'system');
-      return;
-    }
-    // Kotlin returns: {text: "...", toolCalls: [{name: "...", args: "..."}]}
+    if (parsed.error) { addMsg(parsed.error, 'system'); return; }
     var toolCalls = parsed.toolCalls;
     if (toolCalls && toolCalls.length > 0) {
       for (var i = 0; i < toolCalls.length; i++) {
@@ -775,18 +771,18 @@ function handleLLMResponse(result) {
         try { args = (typeof tc.args === 'string') ? JSON.parse(tc.args) : (tc.args || {}); } catch(e) { args = {}; }
         executeTool(tc.name, args);
       }
+      addMsg('已创建 ' + toolCalls.length + ' 个物体', 'bot');
     }
-    if (parsed.text) {
-      addMsg(parsed.text, 'bot');
-      chatHistory.push({role:'assistant', content: parsed.text});
+    if (parsed.text) { addMsg(parsed.text, 'bot'); }
+    var historyContent = parsed.text || '';
+    if (toolCalls && toolCalls.length > 0) {
+      var toolSummary = toolCalls.map(function(tc) { return tc.name + '(' + (typeof tc.args === 'string' ? tc.args : JSON.stringify(tc.args)) + ')'; }).join('; ');
+      historyContent = (historyContent ? historyContent + '\n' : '') + '[已执行工具: ' + toolSummary + ']';
     }
+    if (historyContent) { chatHistory.push({role:'assistant', content: historyContent}); }
   } catch(e) {
-    if (typeof result === 'string') {
-      addMsg(result, 'bot');
-      chatHistory.push({role:'assistant', content: result});
-    } else {
-      addMsg('Error parsing response.', 'system');
-    }
+    if (typeof result === 'string') { addMsg(result, 'bot'); chatHistory.push({role:'assistant', content: result}); }
+    else { addMsg('Error parsing response.', 'system'); }
   }
 }
 
