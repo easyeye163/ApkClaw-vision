@@ -19,6 +19,7 @@ import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.server.LocalWebServer
 import com.apk.claw.android.base.BaseApp
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
+import com.apk.claw.android.voice.VoiceInputController
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import dev.langchain4j.agent.tool.ToolSpecification
@@ -50,6 +51,7 @@ class FPVGameActivity : BaseActivity() {
     private lateinit var webView: WebView
     private var localServer: LocalWebServer? = null
     private var chatModel: dev.langchain4j.model.chat.ChatModel? = null
+    private var fpvVoiceController: VoiceInputController? = null
 
     private val SYSTEM_PROMPT = """你是一个3D世界的AI建造助手。用户会描述他们想要建造的场景，你需要使用可用的工具函数来在3D世界中创建物体。
 可用工具：addTree(x,z,height?,color?), addHouseBody(x,z,width?,height?,depth?,color?), addRock(x,z,scale?,color?), addCloud(x,z,y?,scale?), addFlower(x,z,color?), addCrate(x,z,size?,color?), addSign(x,z,text), addLamp(x,z), executeCode(code), removeDynamic(id), clearDynamicObjects()。
@@ -179,7 +181,7 @@ class FPVGameActivity : BaseActivity() {
 
     override fun isApplyStatusBarPadding() = false
     override fun getDesignWidth() = 1080
-    override fun onDestroy() { super.onDestroy(); VoiceInteractionFloatWindow.onVoiceResultCallback = null; try { VoiceInteractionFloatWindow.dismiss() } catch (_: Exception) {}; localServer?.stop(); webView.destroy() }
+    override fun onDestroy() { super.onDestroy(); VoiceInteractionFloatWindow.onVoiceResultCallback = null; try { VoiceInteractionFloatWindow.dismiss() } catch (_: Exception) {}; fpvVoiceController?.destroy(); fpvVoiceController = null; localServer?.stop(); webView.destroy() }
     override fun onBackPressed() { if (webView.canGoBack()) webView.goBack() }
 
     inner class FPVBridge {
@@ -209,20 +211,41 @@ class FPVGameActivity : BaseActivity() {
         @JavascriptInterface fun exitGame() { runOnUiThread { finish() } }
         @JavascriptInterface fun vibrate(ms: Long) { try { val v = getSystemService(Vibrator::class.java); if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.O) v.vibrate(VibrationEffect.createOneShot(ms,VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") v.vibrate(ms) } catch (_:Exception) {} }
         @JavascriptInterface
-        fun showVoiceFloat() {
+        fun startStt() {
             runOnUiThread {
                 try {
-                    if (!VoiceInteractionFloatWindow.isShowing()) {
-                        VoiceInteractionFloatWindow.onVoiceResultCallback = { voiceText ->
-                            webView.evaluateJavascript(
-                                "if(window.__fpv_voiceInput)window.__fpv_voiceInput('${voiceText.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","")}');",
-                                null
-                            )
+                    fpvVoiceController?.destroy()
+                    val controller = VoiceInputController(applicationContext)
+                    controller.listener = object : VoiceInputController.Listener {
+                        override fun onListeningStarted() {
+                            webView.evaluateJavascript("if(window.__fpv_sttState)window.__fpv_sttState('listening')", null)
                         }
-                        VoiceInteractionFloatWindow.show(application)
+                        override fun onTranscribing() {
+                            webView.evaluateJavascript("if(window.__fpv_sttState)window.__fpv_sttState('transcribing')", null)
+                        }
+                        override fun onFinalResult(text: String) {
+                            val escaped = text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "")
+                            webView.evaluateJavascript("if(window.__fpv_sttResult)window.__fpv_sttResult('$escaped')", null)
+                            fpvVoiceController = null
+                        }
+                        override fun onError(errorCode: Int, message: String) {
+                            val em = message.replace("'", "\\'")
+                            webView.evaluateJavascript("if(window.__fpv_sttError)window.__fpv_sttError('$em')", null)
+                            fpvVoiceController = null
+                        }
                     }
-                } catch (e: Exception) { XLog.e(TAG, "showVoiceFloat: ${e.message}") }
+                    fpvVoiceController = controller
+                    controller.startListening()
+                } catch (e: Exception) {
+                    XLog.e(TAG, "startStt: ${e.message}")
+                    val em = (e.message ?: "unknown").replace("'", "\\'")
+                    webView.evaluateJavascript("if(window.__fpv_sttError)window.__fpv_sttError('$em')", null)
+                }
             }
+        }
+        @JavascriptInterface
+        fun stopStt() {
+            fpvVoiceController?.stopListening()
         }
     }
 
