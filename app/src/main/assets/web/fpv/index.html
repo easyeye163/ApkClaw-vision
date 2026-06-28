@@ -132,21 +132,39 @@ canvas{display:block;width:100%;height:100%;}
 }
 #restartBtn:hover{transform:scale(1.05);}
 
-/* ── Touch Controls ── */
-#touchControls{
-  position:fixed;bottom:20px;left:20px;z-index:55;
+/* ── Virtual Joysticks ── */
+.joystick-zone{
+  position:fixed;bottom:40px;width:160px;height:160px;z-index:55;
   display:none;pointer-events:auto;
 }
-.touch-btn{
-  width:56px;height:56px;border-radius:50%;
-  background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.2);
-  color:rgba(255,255,255,.6);font-size:1.2rem;font-weight:700;
-  display:flex;align-items:center;justify-content:center;
+.joystick-zone.left{left:30px;}
+.joystick-zone.right{right:30px;}
+.joystick-base{
+  position:absolute;width:130px;height:130px;border-radius:50%;
+  background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.12);
+  left:50%;top:50%;transform:translate(-50%,-50%);
+}
+.joystick-knob{
+  position:absolute;width:54px;height:54px;border-radius:50%;
+  background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.35);
+  left:50%;top:50%;transform:translate(-50%,-50%);
+  box-shadow:0 0 12px rgba(0,0,0,.3);
+}
+.joystick-label{
+  position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);
+  color:rgba(255,255,255,.3);font-size:.65rem;white-space:nowrap;
+}
+
+/* ── Voice Button ── */
+#voiceBtn{
+  position:fixed;bottom:60px;right:210px;z-index:56;
+  width:50px;height:50px;border-radius:50%;border:2px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);
+  font-size:1.2rem;display:none;align-items:center;justify-content:center;
+  cursor:pointer;pointer-events:auto;
   -webkit-tap-highlight-color:transparent;user-select:none;
 }
-.touch-btn:active{background:rgba(255,255,255,.25);}
-.touch-row{display:flex;gap:8px;justify-content:center;}
-.touch-row+.touch-row{margin-top:6px;}
+#voiceBtn:active{background:rgba(255,255,255,.25);}
 </style>
 </head>
 <body>
@@ -192,21 +210,17 @@ canvas{display:block;width:100%;height:100%;}
   <button id="restartBtn">Fly Again</button>
 </div>
 
-<!-- Touch Controls -->
-<div id="touchControls">
-  <div class="touch-row">
-    <div class="touch-btn" data-key="up">&#x25B2;</div>
-  </div>
-  <div class="touch-row">
-    <div class="touch-btn" data-key="left">&#x25C0;</div>
-    <div class="touch-btn" data-key="down">&#x25BC;</div>
-    <div class="touch-btn" data-key="right">&#x25B6;</div>
-  </div>
-  <div class="touch-row">
-    <div class="touch-btn" data-key="space">&#x2191;</div>
-    <div class="touch-btn" data-key="shift">&#x2193;</div>
-  </div>
+<!-- Virtual Joysticks -->
+<div class="joystick-zone left" id="joystickLeft">
+  <div class="joystick-base"><div class="joystick-knob"></div></div>
+  <div class="joystick-label">方向/油门</div>
 </div>
+<div class="joystick-zone right" id="joystickRight">
+  <div class="joystick-base"><div class="joystick-knob"></div></div>
+  <div class="joystick-label">俯仰/翻滚</div>
+</div>
+<!-- Voice Button for LLM -->
+<div id="voiceBtn">&#x1f3a4;</div>
 
 <script src="./three.min.js"></script>
 <script>
@@ -220,14 +234,27 @@ var game = {
   chests: [], clouds: [], dynamicObjects: [],
   velocity: new THREE.Vector3(),
   keys: {},
-  speed: 0.5, maxSpeed: 1.8, accel: 0.04, friction: 0.97,
+  speed: 0, maxSpeed: 1.8, accel: 0.04, friction: 0.97,
   yaw: 0, pitch: 0, roll: 0,
   clock: new THREE.Clock()
 };
 
+/* ─── Joystick State ─── */
+var joystickState = {
+  left:  { active: false, id: null, x: 0, y: 0, knobEl: null },
+  right: { active: false, id: null, x: 0, y: 0, knobEl: null }
+};
+
 /* ─── LLM Callback System ─── */
 window.__fpv_llmCallbacks = {};
-window.__fpv_llmCallback = function(id, result) {
+window.__fpv_llmCallback = function(id, base64Result) {
+  var result;
+  try {
+    var binary = atob(base64Result);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    result = new TextDecoder('utf-8').decode(bytes);
+  } catch(e) { result = base64Result; }
   var cb = window.__fpv_llmCallbacks[id];
   if (cb) { delete window.__fpv_llmCallbacks[id]; cb(result); }
 };
@@ -249,6 +276,9 @@ var $notification  = document.getElementById('notification');
 var $completion    = document.getElementById('completionScreen');
 var $restartBtn    = document.getElementById('restartBtn');
 var $touchControls = document.getElementById('touchControls');
+var $joystickLeft  = document.getElementById('joystickLeft');
+var $joystickRight = document.getElementById('joystickRight');
+var $voiceBtn      = document.getElementById('voiceBtn');
 
 /* ─── Helpers ─── */
 function notify(text, duration) {
@@ -561,31 +591,52 @@ function animate() {
   var dt = game.clock.getDelta();
   var k = game.keys;
   var sp = game.speed;
+  var lj = joystickState.left;
+  var rj = joystickState.right;
 
-  // Acceleration
-  if (k['w'] || k['arrowup'])    sp = Math.min(sp + game.accel, game.maxSpeed);
-  else if (k['s'] || k['arrowdown']) sp = Math.max(sp - game.accel * 0.5, 0.05);
-  else sp *= game.friction;
-  if (sp < 0.05) sp = 0.05;
+  // Acceleration (keyboard + left joystick Y: up=negative=throttle)
+  var wantAccel = (k['w'] || k['arrowup'] || (lj.active && lj.y < -0.15));
+  var wantBrake = (k['s'] || k['arrowdown'] || (lj.active && lj.y > 0.15));
+  if (wantAccel) {
+    var accelMul = lj.active ? Math.abs(lj.y) : 1;
+    sp = Math.min(sp + game.accel * accelMul, game.maxSpeed);
+  } else if (wantBrake) {
+    var brakeMul = lj.active ? lj.y : 1;
+    sp = Math.max(sp - game.accel * 0.5 * brakeMul, 0);
+  } else {
+    sp *= game.friction;
+  }
+  if (sp < 0.001) sp = 0;
   game.speed = sp;
 
-  // Turning
+  // Turning (keyboard + left joystick X)
   var turnRate = 0.025;
-  if (k['a'] || k['arrowleft'])  game.yaw += turnRate * sp * 2;
-  if (k['d'] || k['arrowright']) game.yaw -= turnRate * sp * 2;
+  var yawInput = 0;
+  if (k['a'] || k['arrowleft']) yawInput += 1;
+  if (k['d'] || k['arrowright']) yawInput -= 1;
+  if (lj.active && Math.abs(lj.x) > 0.1) yawInput -= lj.x;
+  game.yaw += yawInput * turnRate * Math.max(sp, 0.3) * 2;
 
-  // Pitch & vertical
+  // Pitch & vertical (keyboard + right joystick)
   if (k[' '])     game.velocity.y += 0.08;
   if (k['shift']) game.velocity.y -= 0.08;
+  if (rj.active && Math.abs(rj.y) > 0.15) {
+    game.velocity.y -= rj.y * 0.06;
+  }
   game.velocity.y *= 0.94;
-  if (k['w'] || k['arrowup'])    game.pitch = THREE.MathUtils.lerp(game.pitch, -0.15, 0.03);
-  else if (k['s'] || k['arrowdown']) game.pitch = THREE.MathUtils.lerp(game.pitch, 0.15, 0.03);
-  else game.pitch *= 0.95;
 
-  // Roll visual
+  // Pitch visual (keyboard + right joystick Y)
+  var targetPitch = 0;
+  if (k['w'] || k['arrowup']) targetPitch = -0.15;
+  else if (k['s'] || k['arrowdown']) targetPitch = 0.15;
+  if (rj.active && Math.abs(rj.y) > 0.1) targetPitch = -rj.y * 0.35;
+  game.pitch = THREE.MathUtils.lerp(game.pitch, targetPitch, 0.05);
+
+  // Roll visual (keyboard + right joystick X)
   var targetRoll = 0;
   if (k['a'] || k['arrowleft']) targetRoll = 0.3;
   if (k['d'] || k['arrowright']) targetRoll = -0.3;
+  if (rj.active && Math.abs(rj.x) > 0.1) targetRoll = -rj.x * 0.45;
   game.roll = THREE.MathUtils.lerp(game.roll, targetRoll, 0.05);
 
   // Move camera
@@ -653,31 +704,67 @@ function setupControls() {
     game.keys[e.key.toLowerCase()] = false;
   });
 
-  // Touch
+  // Mobile: show joysticks and voice button
   if (isMobile()) {
-    $touchControls.style.display = 'block';
+    $joystickLeft.style.display = 'block';
+    $joystickRight.style.display = 'block';
+    $voiceBtn.style.display = 'flex';
+    initJoystick('left', $joystickLeft);
+    initJoystick('right', $joystickRight);
   }
-  $touchControls.addEventListener('touchstart', function(e) {
-    e.preventDefault();
-    handleTouchKey(e.target, true);
-  }, { passive: false });
-  $touchControls.addEventListener('touchend', function(e) {
-    e.preventDefault();
-    handleTouchKey(e.target, false);
-  }, { passive: false });
-  $touchControls.addEventListener('touchcancel', function(e) {
-    handleTouchKey(e.target, false);
-  });
 }
 
-function handleTouchKey(el, state) {
-  if (!el || !el.dataset.key) return;
-  var keyMap = {
-    'up': 'w', 'down': 's', 'left': 'a', 'right': 'd',
-    'space': ' ', 'shift': 'shift'
-  };
-  var k = keyMap[el.dataset.key];
-  if (k) game.keys[k] = state;
+function initJoystick(side, container) {
+  var state = joystickState[side];
+  state.knobEl = container.querySelector('.joystick-knob');
+  var baseEl = container.querySelector('.joystick-base');
+  var maxR = 42;
+
+  baseEl.addEventListener('touchstart', function(e) {
+    e.preventDefault(); e.stopPropagation();
+    if (state.active) return;
+    var t = e.changedTouches[0];
+    state.active = true; state.id = t.identifier;
+    moveJoystickKnob(side, t, baseEl, maxR);
+  }, { passive: false });
+
+  document.addEventListener('touchmove', function(e) {
+    if (!state.active) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === state.id) {
+        moveJoystickKnob(side, e.changedTouches[i], baseEl, maxR);
+        break;
+      }
+    }
+  }, { passive: false });
+
+  function endTouch(e) {
+    if (!state.active) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === state.id) {
+        state.active = false; state.id = null;
+        state.x = 0; state.y = 0;
+        state.knobEl.style.transform = 'translate(-50%,-50%)';
+        break;
+      }
+    }
+  }
+  document.addEventListener('touchend', endTouch);
+  document.addEventListener('touchcancel', endTouch);
+}
+
+function moveJoystickKnob(side, touch, baseEl, maxR) {
+  var state = joystickState[side];
+  var rect = baseEl.getBoundingClientRect();
+  var cx = rect.left + rect.width / 2;
+  var cy = rect.top + rect.height / 2;
+  var dx = touch.clientX - cx;
+  var dy = touch.clientY - cy;
+  var dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist > maxR) { dx = dx / dist * maxR; dy = dy / dist * maxR; }
+  state.x = dx / maxR;
+  state.y = dy / maxR;
+  state.knobEl.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px))';
 }
 
 /* ─── Chat System ─── */
@@ -1111,7 +1198,7 @@ function startGame() {
 function restartGame() {
   $completion.classList.remove('visible');
   game.chestsCollected = 0;
-  game.speed = 0.5;
+  game.speed = 0;
   game.yaw = 0; game.pitch = 0; game.roll = 0;
   game.velocity.set(0, 0, 0);
   game.camera.position.set(0, 25, 0);
@@ -1150,6 +1237,15 @@ function init() {
   });
   $chatInput.addEventListener('keyup', function(e) {
     e.stopPropagation();
+  });
+  // Voice button -> trigger Android voice float for LLM building
+  $voiceBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (window.AndroidBridge && typeof window.AndroidBridge.showVoiceFloat === 'function') {
+      try { window.AndroidBridge.showVoiceFloat(); } catch(ex) { notify('Voice not available'); }
+    } else {
+      notify('Voice not available');
+    }
   });
   window.addEventListener('resize', onResize);
 
