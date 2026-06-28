@@ -219,8 +219,8 @@ canvas{display:block;width:100%;height:100%;}
   <div class="joystick-base"><div class="joystick-knob"></div></div>
   <div class="joystick-label">俯仰/翻滚</div>
 </div>
-<!-- Voice Button for LLM -->
-<div id="voiceBtn">&#x1f3a4;</div>
+<!-- Chat/Text Button for LLM building -->
+<div id="voiceBtn">&#x270f;&#xfe0f;</div>
 
 <script src="./three.min.js"></script>
 <script>
@@ -653,13 +653,9 @@ function animate() {
   }
   if (game.camera.position.y > 200) game.camera.position.y = 200;
 
-  // Camera look direction
-  var lookDir = new THREE.Vector3(0, 0, -1);
-  lookDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), game.pitch);
-  lookDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), game.yaw);
-  var lookTarget = game.camera.position.clone().add(lookDir);
-  game.camera.lookAt(lookTarget);
-  game.camera.rotation.z = game.roll;
+  // Camera rotation: YXZ euler order avoids gimbal lock / flip
+  var euler = new THREE.Euler(game.pitch, game.yaw, game.roll, 'YXZ');
+  game.camera.quaternion.setFromEuler(euler);
 
   // Animate clouds
   game.clouds.forEach(function(cl) {
@@ -1238,14 +1234,13 @@ function init() {
   $chatInput.addEventListener('keyup', function(e) {
     e.stopPropagation();
   });
-  // Voice button -> trigger Android voice float for LLM building
+  // Chat button -> open chat panel directly for text input / LLM building
   $voiceBtn.addEventListener('click', function(e) {
     e.stopPropagation();
-    if (window.AndroidBridge && typeof window.AndroidBridge.showVoiceFloat === 'function') {
-      try { window.AndroidBridge.showVoiceFloat(); } catch(ex) { notify('Voice not available'); }
-    } else {
-      notify('Voice not available');
+    if (!$chatPanel.classList.contains('open')) {
+      $chatPanel.classList.add('open');
     }
+    try { $chatInput.focus(); } catch(ex) {}
   });
   window.addEventListener('resize', onResize);
 
