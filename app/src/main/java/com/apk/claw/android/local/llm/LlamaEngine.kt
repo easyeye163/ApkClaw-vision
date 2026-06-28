@@ -35,7 +35,7 @@ class LlamaEngine private constructor(
 
     companion object {
         private const val TAG = "LlamaEngine"
-        const val DEFAULT_PREDICT_LENGTH = 512
+        const val DEFAULT_PREDICT_LENGTH = 4096
 
         @Volatile
         private var instance: LlamaEngine? = null
