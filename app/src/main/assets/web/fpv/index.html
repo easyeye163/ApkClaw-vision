@@ -56,17 +56,20 @@ canvas{display:block;width:100%;height:100%;}
   border-right:none;border-bottom:none;
   display:flex;flex-direction:column;
   transform:translateX(100%);transition:transform .35s cubic-bezier(.4,0,.2,1);
-  overflow:hidden;
 }
 #chatPanel.open{transform:translateX(0);}
 #chatToggle{
-  position:absolute;top:-44px;left:0;
-  width:44px;height:44px;border-radius:12px 0 0 0;
-  background:rgba(10,14,39,.92);border:1px solid rgba(255,255,255,.08);border-right:none;border-bottom:none;
-  color:#fff;font-size:1.3rem;cursor:pointer;
+  position:fixed;top:12px;right:12px;z-index:65;
+  width:48px;height:48px;border-radius:50%;
+  background:linear-gradient(135deg,#4a7cc9,#1e88e5);border:2px solid rgba(255,255,255,.25);
+  color:#fff;font-size:1.4rem;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   pointer-events:auto;
+  box-shadow:0 2px 12px rgba(30,136,229,.5);
+  -webkit-tap-highlight-color:transparent;user-select:none;
+  transition:transform .2s,box-shadow .2s;
 }
+#chatToggle:active{transform:scale(.9);box-shadow:0 1px 6px rgba(30,136,229,.4);}
 #chatHeader{
   padding:10px 14px;font-size:.82rem;font-weight:700;color:rgba(255,255,255,.7);
   text-transform:uppercase;letter-spacing:.08em;
@@ -169,15 +172,7 @@ canvas{display:block;width:100%;height:100%;}
 }
 
 /* ── Voice Button ── */
-#voiceBtn{
-  position:fixed;bottom:60px;right:210px;z-index:56;
-  width:50px;height:50px;border-radius:50%;border:2px solid rgba(255,255,255,.25);
-  background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);
-  font-size:1.2rem;display:none;align-items:center;justify-content:center;
-  cursor:pointer;pointer-events:auto;
-  -webkit-tap-highlight-color:transparent;user-select:none;
-}
-#voiceBtn:active{background:rgba(255,255,255,.25);}
+/* voiceBtn removed - using standalone chatToggle FAB instead */
 </style>
 </head>
 <body>
@@ -204,7 +199,6 @@ canvas{display:block;width:100%;height:100%;}
 
 <!-- Chat Panel -->
 <div id="chatPanel">
-  <button id="chatToggle" aria-label="Toggle chat">&#x1f4ac;</button>
   <div id="chatHeader"><span>AI Assistant</span><button id="chatClose" aria-label="Close">&times;</button></div>
   <div id="chatMessages"></div>
   <div id="chatInputWrap">
@@ -233,8 +227,8 @@ canvas{display:block;width:100%;height:100%;}
   <div class="joystick-base"><div class="joystick-knob"></div></div>
   <div class="joystick-label">俯仰/翻滚</div>
 </div>
-<!-- Chat/Text Button for LLM building -->
-<div id="voiceBtn">&#x270f;&#xfe0f;</div>
+<!-- AI Chat FAB (standalone, always visible) -->
+<button id="chatToggle" aria-label="AI Assistant">&#x1f4ac;</button>
 
 <script src="./three.min.js"></script>
 <script>
@@ -293,7 +287,7 @@ var $restartBtn    = document.getElementById('restartBtn');
 var $touchControls = document.getElementById('touchControls');
 var $joystickLeft  = document.getElementById('joystickLeft');
 var $joystickRight = document.getElementById('joystickRight');
-var $voiceBtn      = document.getElementById('voiceBtn');
+var $voiceBtn      = null; // removed - chatToggle is now standalone FAB
 
 /* ─── Helpers ─── */
 function notify(text, duration) {
@@ -720,11 +714,10 @@ function setupControls() {
     game.keys[e.key.toLowerCase()] = false;
   });
 
-  // Mobile: show joysticks and voice button
+  // Mobile: show joysticks
   if (isMobile()) {
     $joystickLeft.style.display = 'block';
     $joystickRight.style.display = 'block';
-    $voiceBtn.style.display = 'flex';
     initJoystick('left', $joystickLeft);
     initJoystick('right', $joystickRight);
   }
@@ -1314,15 +1307,6 @@ function init() {
   $chatInput.addEventListener('keyup', function(e) {
     e.stopPropagation();
   });
-  // Chat/Text button -> toggle chat panel
-  $voiceBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    $chatPanel.classList.toggle('open');
-    if ($chatPanel.classList.contains('open')) {
-      try { $chatInput.focus(); } catch(ex) {}
-    }
-  });
-
   // Close button inside chat header
   $chatClose.addEventListener('click', function(e) {
     e.stopPropagation();
