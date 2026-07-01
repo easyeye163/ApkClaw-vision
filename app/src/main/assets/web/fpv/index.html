@@ -958,6 +958,7 @@ function executeTool(name, args) {
     case 'addSign': obj = createSign(px, py, pz, args); break;
     case 'addLamp': obj = createLamp(px, py, pz, args); break;
     case 'executeCode': obj = executeCode(args); break;
+    case 'addCompositeObject': obj = addCompositeObject(px, py, pz, args); break;
     case 'removeDynamic':
       removeDynamic(args);
       return;
@@ -1185,6 +1186,65 @@ function executeCode(args) {
   return mesh;
 }
 
+/* ─── Composite Object Builder ─── */
+function resolveColor(c) {
+  if (!c) return 0x4a7cc9;
+  if (typeof c === 'number') return c;
+  if (c.charAt(0) === '#') return parseInt(c.slice(1), 16);
+  var map = {
+    RED:0xff0000, GREEN:0x00cc00, BLUE:0x0066ff, YELLOW:0xffdd00,
+    ORANGE:0xff8800, PURPLE:0x8800ff, PINK:0xff44aa, CYAN:0x00dddd,
+    WHITE:0xffffff, GRAY:0x888888, BLACK:0x222222, BROWN:0x8B4513,
+    GOLD:0xFFD700, SILVER:0xC0C0C0, DARK_RED:0x8B0000, DARK_GREEN:0x006400,
+    DARK_BLUE:0x00008B, LIGHT_BLUE:0x87CEEB, LIGHT_GREEN:0x90EE90,
+    SKY_BLUE:0x87CEEB, CREAM:0xFFFDD0, WOOD:0xDEB887, STONE:0x808080,
+    BRICK:0xCB4154, SAND:0xC2B280, TURQUOISE:0x40E0D0, CORAL:0xFF7F50,
+    LIME:0x00FF00, NAVY:0x000080, MAROON:0x800000, TEAL:0x008080,
+    OLIVE:0x808000, AQUA:0x00FFFF, SALMON:0xFA8072, KHAKI:0xF0E68C,
+    IVORY:0xFFFFF0, CHOCOLATE:0xD2691E, FIRE_RED:0xFF2200, ICE_BLUE:0x99CCFF,
+    FOREST_GREEN:0x228B22, ROSE:0xFF007F, VIOLET:0xEE82EE, INDIGO:0x4B0082
+  };
+  var n = map[c.toUpperCase()];
+  return n !== undefined ? n : 0x4a7cc9;
+}
+
+function addCompositeObject(x, y, z, args) {
+  var g = new THREE.Group();
+  var parts = args.parts || [];
+  if (typeof parts === 'string') { try { parts = JSON.parse(parts); } catch(e) { parts = []; } }
+  var rotY = (args.rotationY || 0) * Math.PI / 180;
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    var geo;
+    var t = (p.type || 'box').toLowerCase();
+    switch(t) {
+      case 'sphere': geo = new THREE.SphereGeometry(p.r || 1, p.segments || 16, p.segments || 16); break;
+      case 'cylinder': geo = new THREE.CylinderGeometry(p.rt || 0.5, p.rb || 0.5, p.h || 2, p.segments || 12); break;
+      case 'cone': geo = new THREE.ConeGeometry(p.r || 1, p.h || 2, p.segments || 12); break;
+      case 'torus': geo = new THREE.TorusGeometry(p.r || 1, p.tube || 0.3, 12, 24); break;
+      case 'plane': geo = new THREE.PlaneGeometry(p.w || 1, p.h || 1); break;
+      default: geo = new THREE.BoxGeometry(p.w || 1, p.h || 1, p.d || 1); break;
+    }
+    var matOpt = { color: resolveColor(p.color), roughness: p.roughness !== undefined ? p.roughness : 0.5, metalness: p.metalness !== undefined ? p.metalness : 0.3 };
+    if (p.emissive !== undefined) matOpt.emissive = resolveColor(p.emissive);
+    if (p.transparent) matOpt.transparent = true;
+    if (p.opacity !== undefined) matOpt.opacity = p.opacity;
+    var mat = new THREE.MeshStandardMaterial(matOpt);
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(p.ox || 0, p.oy || 0, p.oz || 0);
+    if (p.rx) mesh.rotation.x = p.rx * Math.PI / 180;
+    if (p.ry) mesh.rotation.y = p.ry * Math.PI / 180;
+    if (p.rz) mesh.rotation.z = p.rz * Math.PI / 180;
+    if (p.sx || p.sy || p.sz) mesh.scale.set(p.sx || 1, p.sy || 1, p.sz || 1);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    g.add(mesh);
+  }
+  g.position.set(x, y, z);
+  g.rotation.y = rotY;
+  return g;
+}
+
 function removeDynamic(args) {
   if (typeof args === 'string') { try { args = JSON.parse(args); } catch(e) { args = {}; } }
   var idx = args.index;
@@ -1208,7 +1268,7 @@ function startGame() {
   $hud.classList.add('visible');
   game.started = true;
   game.clock.start();
-  addMsg('欢迎来到灵境！用 WASD 飞行，空格/Shift 上升下降。右下角打开AI助手，用文字或语音描述你想建造的场景。', 'bot');
+  addMsg('欢迎来到灵境！用 WASD 飞行，空格/Shift 上升下降。右下角打开AI助手，用文字或语音描述你想建造的任何东西——汽车、飞机、城堡、桥梁、动物……都可以！', 'bot');
 }
 
 function restartGame() {

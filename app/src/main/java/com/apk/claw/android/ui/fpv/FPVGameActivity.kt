@@ -53,9 +53,45 @@ class FPVGameActivity : BaseActivity() {
     private var chatModel: dev.langchain4j.model.chat.ChatModel? = null
     private var fpvVoiceController: VoiceInputController? = null
 
-    private val SYSTEM_PROMPT = """你是一个3D世界的AI建造助手。用户会描述他们想要建造的场景，你需要使用可用的工具函数来在3D世界中创建物体。
-可用工具：addTree(x,z,height?,color?), addHouseBody(x,z,width?,height?,depth?,color?), addRock(x,z,scale?,color?), addCloud(x,z,y?,scale?), addFlower(x,z,color?), addCrate(x,z,size?,color?), addSign(x,z,text), addLamp(x,z), executeCode(code), removeDynamic(id), clearDynamicObjects()。
-规则：1.只使用上面列出的工具 2.合理分布物体位置 3.颜色可用RED/GREEN/BLUE等名称或#hex 4.坐标范围-200到200 5.用中文回复 6.尽量一次调用多个工具""".trimIndent()
+    private val SYSTEM_PROMPT = """你是一个3D世界的AI自由建造助手。用户会用自然语言描述想建造的任何物体或场景，你需要用工具在3D世界中创建它们。
+
+## 可用工具
+
+**快捷预制物体（适合简单需求）：**
+addTree(x,z,height?,color?), addHouseBody(x,z,width?,height?,depth?,color?), addRock(x,z,scale?,color?), addCloud(x,z,y?,scale?), addFlower(x,z,color?), addCrate(x,z,size?,color?), addSign(x,z,text), addLamp(x,z)
+
+**自由建造（核心工具，可建造任意物体）：**
+addCompositeObject(x,z,rotationY?,parts) - 用基础形状组合创建任意复杂物体。parts是部件数组，每个部件：
+  {type:"box/sphere/cylinder/cone/torus/plane", ox,oy,oz, w,h,d, r,rt,rb,h,tube, color, roughness?,metalness?,emissive?,transparent?,opacity?,rx?,ry?,rz?,sx?,sy?,sz?}
+  - type: 形状类型（默认box）
+  - ox,oy,oz: 相对于物体中心的偏移坐标
+  - box参数: w(宽) h(高) d(深)
+  - sphere参数: r(半径)
+  - cylinder参数: rt(顶半径) rb(底半径) h(高)
+  - cone参数: r(半径) h(高)
+  - torus参数: r(环半径) tube(管半径)
+  - plane参数: w(宽) h(高)
+  - color: RED/GREEN/BLUE/YELLOW/ORANGE/PURPLE/PINK/CYAN/WHITE/GRAY/BLACK/BROWN/GOLD/SILVER/DARK_RED/DARK_BLUE/LIGHT_BLUE/LIGHT_GREEN/SKY_BLUE/CREAM/WOOD/STONE/BRICK/SAND/TURQUOISE/CORAL/LIME/NAVY/MAROON/TEAL/OLIVE/AQUA/SALMON/KHAKI/IVORY/CHOCOLATE/FIRE_RED/ICE_BLUE/FOREST_GREEN/ROSE/VIOLET/INDIGO 或 #hex
+  - rx,ry,rz: 旋转角度(度)
+  - sx,sy,sz: 缩放
+
+**其他：**
+executeCode(code), removeDynamic(id), clearDynamicObjects()
+
+## 建造规则
+1. 优先使用addCompositeObject来建造复杂物体（车辆、建筑、动物、家具、武器等），用多个部件组合
+2. 简单的自然物体可用快捷工具（树、石头、花等）
+3. 合理分布物体位置，坐标范围-200到200
+4. 注意部件的偏移坐标(ox,oy,oz)让物体各部分正确拼合
+5. 用中文回复用户，简短描述你建造了什么
+6. 尽量一次调用多个工具来建造完整场景
+7. 物体默认放在相机前方附近，无需指定坐标时传x:0,z:0即可自动放置
+
+## 建造示例思路
+- 红色汽车：车体(box)+车顶(box)+4个轮子(cylinder)+车窗(box,transparent)+车灯(sphere,emissive)
+- 塔楼：底座(box)+多层墙体(box)+窗户(box)+尖顶(cone)+旗帜(plane)
+- 桥梁：桥面(box)+桥墩(cylinder×2)+栏杆(box)
+- 飞机：机身(cylinder)+机翼(box×2)+尾翼(box)+引擎(cylinder×2)""".trimIndent()
 
     private fun tool(name: String, desc: String, vararg params: Pair<String, dev.langchain4j.model.chat.request.json.JsonSchemaElement>): ToolSpecification {
         val map = linkedMapOf<String, dev.langchain4j.model.chat.request.json.JsonSchemaElement>()
@@ -120,6 +156,12 @@ class FPVGameActivity : BaseActivity() {
             tool("addLamp", "在坐标添加路灯(带光源)",
                 "x" to JsonIntegerSchema.builder().description("X坐标").build(),
                 "z" to JsonIntegerSchema.builder().description("Z坐标").build()
+            ),
+            tool("addCompositeObject", "用基础形状组合创建任意复杂物体(车辆/建筑/动物/家具/武器等)。parts数组中每个部件: {type,ox,oy,oz,w,h,d,r,rt,rb,h,tube,color,roughness?,metalness?,emissive?,transparent?,opacity?,rx?,ry?,rz?,sx?,sy?,sz?}。type可选box/sphere/cylinder/cone/torus/plane。ox/oy/oz是相对偏移。box用w/h/d,sphere用r,cylinder用rt/rb/h,cone用r/h,torus用r/tube。color可用RED/GREEN/BLUE等名称或#hex",
+                "x" to JsonIntegerSchema.builder().description("X坐标(0=自动放置在相机前)").build(),
+                "z" to JsonIntegerSchema.builder().description("Z坐标(0=自动放置在相机前)").build(),
+                "rotationY" to JsonIntegerSchema.builder().description("整体旋转角度(可选,默认0)").build(),
+                "parts" to JsonStringSchema.builder().description("部件JSON数组,如[{type:'box',ox:0,oy:1,w:4,h:2,d:2,color:'RED'},{type:'cylinder',ox:-1.5,oy:0,oz:1,r:0.5,h:0.3,color:'BLACK'}]").build()
             ),
             tool("executeCode", "执行Three.js代码。可用:box(x,y,z,w,h,d,color),sphere(x,y,z,r,color),cylinder(x,y,z,rt,rb,h,color),cone(x,y,z,r,h,color),torus(x,y,z,r,tube,color)。常量:PI,RED,GREEN,BLUE,YELLOW,ORANGE,PURPLE,PINK,CYAN,WHITE,GRAY,BROWN,GOLD,SILVER",
                 "code" to JsonStringSchema.builder().description("JavaScript代码").build()
