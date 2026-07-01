@@ -1343,11 +1343,25 @@ function init() {
   };
   $sttBtn.addEventListener('click', function(e) {
     e.stopPropagation();
+    e.preventDefault();
     if (!window.AndroidBridge) return;
     if (sttListening) {
+      // 立即同步更新UI和状态，不等待异步回调
+      sttListening = false;
+      $sttBtn.style.background = 'rgba(85,85,85,.8)';
+      $sttBtn.innerHTML = '&#x23F3;';
       try { window.AndroidBridge.stopStt(); } catch(ex) {}
     } else {
-      try { window.AndroidBridge.startStt(); } catch(ex) { notify('Voice not available'); }
+      // 立即同步标记为录音中，防止快速双击触发两次startStt
+      sttListening = true;
+      $sttBtn.style.background = 'rgba(229,57,53,.8)';
+      $sttBtn.innerHTML = '&#x23F9;';
+      try { window.AndroidBridge.startStt(); } catch(ex) {
+        sttListening = false;
+        $sttBtn.style.background = 'rgba(30,136,229,.5)';
+        $sttBtn.innerHTML = '&#x1f3a4;';
+        notify('Voice not available');
+      }
     }
   });
   window.addEventListener('resize', onResize);

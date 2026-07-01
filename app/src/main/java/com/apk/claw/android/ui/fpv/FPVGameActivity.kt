@@ -287,7 +287,9 @@ executeCode(code), removeDynamic(id), clearDynamicObjects()
         }
         @JavascriptInterface
         fun stopStt() {
-            fpvVoiceController?.stopListening()
+            runOnUiThread {
+                fpvVoiceController?.stopListening()
+            }
         }
     }
 
