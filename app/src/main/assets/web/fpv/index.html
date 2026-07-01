@@ -29,8 +29,6 @@ canvas{display:block;width:100%;height:100%;}
 #startBtn:hover{transform:scale(1.05);box-shadow:0 6px 32px rgba(255,111,0,.65);}
 #startBtn:active{transform:scale(.97);}
 .controls-hint{margin-top:1.6em;font-size:.8rem;opacity:.6;line-height:1.7;}
-.controls-hint .mobile-hint{display:none;}
-@media (pointer:coarse){.controls-hint .desktop-hint{display:none;}.controls-hint .mobile-hint{display:block;}}
 
 /* ── HUD ── */
 #hud{
@@ -48,6 +46,23 @@ canvas{display:block;width:100%;height:100%;}
 }
 .hud-box .label{opacity:.6;font-weight:400;font-size:.75rem;letter-spacing:.06em;}
 .hud-box .val{font-variant-numeric:tabular-nums;min-width:48px;text-align:right;}
+
+/* ── Flight Mode Toggle ── */
+#modeToggle{
+  position:fixed;top:12px;left:12px;z-index:65;
+  padding:6px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.2);
+  background:rgba(0,0,0,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;
+  pointer-events:auto;display:flex;align-items:center;gap:6px;
+  -webkit-tap-highlight-color:transparent;user-select:none;
+  transition:background .2s,transform .15s;
+  opacity:0;transition:opacity .5s ease,background .2s,transform .15s;
+}
+#modeToggle.visible{opacity:1;}
+#modeToggle:active{transform:scale(.93);}
+#modeToggle .mode-dot{width:8px;height:8px;border-radius:50%;}
+#modeToggle .mode-dot.stable{background:#4caf50;box-shadow:0 0 6px rgba(76,175,80,.6);}
+#modeToggle .mode-dot.manual{background:#ff9800;box-shadow:0 0 6px rgba(255,152,0,.6);}
 
 /* ── Chat Panel ── */
 #chatPanel{
@@ -184,8 +199,7 @@ canvas{display:block;width:100%;height:100%;}
   <p>在美丽的3D世界中自由飞行，收集隐藏在山峦、森林和湖泊间的12个宝箱，用AI语音建造你想象中的场景。</p>
   <button id="startBtn">起飞</button>
   <div class="controls-hint">
-    <div class="desktop-hint">WASD / 方向键 — 飞行 &nbsp;|&nbsp; 空格 — 上升 &nbsp;|&nbsp; Shift — 下降</div>
-    <div class="mobile-hint">左摇杆 — 方向/油门/下降 &nbsp;|&nbsp; 右摇杆 — 俯仰/翻滚<br>右上角 💬 打开AI助手，语音或文字描述你想建造的场景</div>
+    左摇杆 — 方向/油门/下降 &nbsp;|&nbsp; 右摇杆 — 俯仰/翻滚<br>右上角 💬 打开AI助手，语音或文字描述你想建造的场景
   </div>
 </div>
 
@@ -227,6 +241,9 @@ canvas{display:block;width:100%;height:100%;}
   <div class="joystick-label">俯仰/翻滚</div>
 </div>
 
+<!-- 飞行模式切换按钮 -->
+<button id="modeToggle" aria-label="飞行模式"><span class="mode-dot stable"></span>自稳模式</button>
+
 <!-- AI对话浮动按钮（独立于面板，始终可见） -->
 <button id="chatToggle" aria-label="AI助手">&#x1f4ac;</button>
 
@@ -244,6 +261,9 @@ var game = {
   keys: {},
   speed: 0.5, maxSpeed: 1.8, accel: 0.04, friction: 0.97,
   yaw: 0, pitch: 0, roll: 0,
+  flightMode: 'stable', /* 'stable'=自稳模式, 'manual'=手动模式 */
+  STABLE_PITCH_LIMIT: 0.52, /* ~30度 */
+  STABLE_ROLL_LIMIT: 0.35, /* ~20度 */
   clock: new THREE.Clock()
 };
 
@@ -274,6 +294,7 @@ var $completion    = document.getElementById('completionScreen');
 var $restartBtn    = document.getElementById('restartBtn');
 var $joystickLeft  = document.getElementById('joystickLeft');
 var $joystickRight = document.getElementById('joystickRight');
+var $modeToggle = document.getElementById('modeToggle');
 
 /* ─── Helpers ─── */
 function notify(text, duration) {
@@ -450,6 +471,11 @@ function animate() {
   if (k['a']||k['arrowleft']) targetRoll=0.3;
   if (k['d']||k['arrowright']) targetRoll=-0.3;
   game.roll=THREE.MathUtils.lerp(game.roll,targetRoll,0.05);
+  /* 自稳模式：限制俯仰和翻滚角度 */
+  if (game.flightMode === 'stable') {
+    game.pitch = THREE.MathUtils.clamp(game.pitch, -game.STABLE_PITCH_LIMIT, game.STABLE_PITCH_LIMIT);
+    game.roll = THREE.MathUtils.clamp(game.roll, -game.STABLE_ROLL_LIMIT, game.STABLE_ROLL_LIMIT);
+  }
   var dir=new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0),game.yaw);
   game.camera.position.addScaledVector(dir,sp);
   game.camera.position.y+=game.velocity.y;
@@ -728,15 +754,27 @@ function removeDynamic(args){if(typeof args==='string'){try{args=JSON.parse(args
 function clearDynamicObjects(){game.dynamicObjects.forEach(function(obj){game.scene.remove(obj);});game.dynamicObjects=[];}
 
 /* ─── Start / Restart ─── */
+function toggleFlightMode() {
+  if (game.flightMode === 'stable') {
+    game.flightMode = 'manual';
+    $modeToggle.innerHTML = '<span class="mode-dot manual"></span>手动模式';
+    notify('已切换为手动模式 — 俯仰翻滚无限制，可大角度飞行');
+  } else {
+    game.flightMode = 'stable';
+    game.pitch = THREE.MathUtils.clamp(game.pitch, -game.STABLE_PITCH_LIMIT, game.STABLE_PITCH_LIMIT);
+    game.roll = THREE.MathUtils.clamp(game.roll, -game.STABLE_ROLL_LIMIT, game.STABLE_ROLL_LIMIT);
+    $modeToggle.innerHTML = '<span class="mode-dot stable"></span>自稳模式';
+    notify('已切换为自稳模式 — 俯仰角限制±30°，自动回正');
+  }
+}
+
 function startGame() {
   $startScreen.classList.add('hidden');
   $hud.classList.add('visible');
+  $modeToggle.classList.add('visible');
   game.started = true;
   game.clock.start();
-  var hint = isMobile()
-    ? '欢迎来到灵境！左摇杆控制飞行方向和油门，右摇杆控制俯仰翻滚。点击右上角 💬 打开AI助手，用文字或语音描述你想建造的场景。'
-    : '欢迎来到灵境！WASD飞行，空格上升，Shift下降。点击右上角 💬 打开AI助手，描述你想建造的场景。';
-  addMsg(hint, 'bot');
+  addMsg('欢迎来到灵境！左摇杆控制飞行方向和油门，右摇杆控制俯仰翻滚。点击右上角 💬 打开AI助手，用文字或语音描述你想建造的场景。', 'bot');
 }
 
 function restartGame() {
@@ -762,11 +800,23 @@ function init() {
   $chatSend.addEventListener('click', sendChat);
   $chatInput.addEventListener('keydown', function(e){if(e.key==='Enter')sendChat();e.stopPropagation();});
   $chatInput.addEventListener('keyup', function(e){e.stopPropagation();});
-  // 语音按钮 → 弹出语音悬浮框
+  // 语音按钮 → 弹出语音悬浮框（带权限检查）
   $voiceBtn.addEventListener('click', function(e){
     e.stopPropagation(); e.preventDefault();
-    try { if(window.AndroidBridge && window.AndroidBridge.showVoiceFloat) window.AndroidBridge.showVoiceFloat(); else notify('语音功能不可用'); }
+    try {
+      if(window.AndroidBridge && window.AndroidBridge.showVoiceFloat) {
+        window.AndroidBridge.showVoiceFloat();
+      } else {
+        notify('语音功能不可用');
+      }
+    }
     catch(ex) { notify('语音功能不可用'); }
+  });
+  // 飞行模式切换
+  $modeToggle.innerHTML = '<span class="mode-dot stable"></span>自稳模式';
+  $modeToggle.addEventListener('click', function(e){
+    e.stopPropagation(); e.preventDefault();
+    toggleFlightMode();
   });
   window.addEventListener('resize', onResize);
   $canvasWrap.addEventListener('touchmove', function(e){e.preventDefault();},{passive:false});

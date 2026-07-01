@@ -1,6 +1,8 @@
 package com.apk.claw.android.ui.fpv
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -13,12 +15,14 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.apk.claw.android.agent.langchain.http.OkHttpClientBuilderAdapter
 import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.server.LocalWebServer
 import com.apk.claw.android.base.BaseApp
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
+import com.apk.claw.android.ui.chat.PermissionRequestActivity
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import dev.langchain4j.agent.tool.ToolSpecification
@@ -241,26 +245,48 @@ addCompositeObject → parts: [{type:box,ox:0,oy:2,oz:0,w:20,h:0.5,d:3,color:GRA
         @JavascriptInterface fun vibrate(ms: Long) { try { val v = getSystemService(Vibrator::class.java); if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.O) v.vibrate(VibrationEffect.createOneShot(ms,VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") v.vibrate(ms) } catch (_:Exception) {} }
 
         /**
-         * 弹出/关闭语音悬浮框，复用VoiceInteractionFloatWindow
+         * 弹出/关闭语音悬浮框，首次点击时检查并申请录音权限
          */
         @JavascriptInterface
         fun showVoiceFloat() {
             runOnUiThread {
                 try {
-                    if (VoiceInteractionFloatWindow.isShowing()) {
-                        VoiceInteractionFloatWindow.dismiss()
-                    } else {
-                        VoiceInteractionFloatWindow.onVoiceResultCallback = { voiceText ->
-                            webView.evaluateJavascript(
-                                "if(window.__fpv_voiceInput)window.__fpv_voiceInput('${voiceText.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","")}');",
-                                null
-                            )
+                    // 检查录音权限，未授权则弹出系统权限申请弹窗
+                    if (ContextCompat.checkSelfPermission(
+                            this@FPVGameActivity,
+                            Manifest.permission.RECORD_AUDIO
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        PermissionRequestActivity.requestPermission(
+                            this@FPVGameActivity,
+                            Manifest.permission.RECORD_AUDIO
+                        ) { granted ->
+                            if (granted) doShowVoiceFloat()
                         }
-                        VoiceInteractionFloatWindow.show(application as BaseApp)
+                        return@runOnUiThread
                     }
+                    doShowVoiceFloat()
                 } catch (e: Exception) {
                     XLog.e(TAG, "showVoiceFloat: ${e.message}")
                 }
+            }
+        }
+
+        private fun doShowVoiceFloat() {
+            try {
+                if (VoiceInteractionFloatWindow.isShowing()) {
+                    VoiceInteractionFloatWindow.dismiss()
+                } else {
+                    VoiceInteractionFloatWindow.onVoiceResultCallback = { voiceText ->
+                        webView.evaluateJavascript(
+                            "if(window.__fpv_voiceInput)window.__fpv_voiceInput('${voiceText.replace("\\","\\\\").replace("'","\\'").replace("\n","\\n").replace("\r","")}');",
+                            null
+                        )
+                    }
+                    VoiceInteractionFloatWindow.show(application as BaseApp)
+                }
+            } catch (e: Exception) {
+                XLog.e(TAG, "doShowVoiceFloat: ${e.message}")
             }
         }
     }
