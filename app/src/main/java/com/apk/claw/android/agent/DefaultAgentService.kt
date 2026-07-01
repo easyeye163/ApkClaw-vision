@@ -709,8 +709,9 @@ class DefaultAgentService : AgentService {
 
                 // 如果没有工具调用，Agent 认为完成了
                 if (!llmResponse.hasToolExecutionRequests()) {
-                    eventLogger.logComplete(iterations, totalTokens, llmResponse.text ?: "Task completed")
-                    callback.onComplete(iterations, llmResponse.text ?: ClawApplication.instance.getString(R.string.agent_task_completed), totalTokens)
+                    val cleanText = sanitizeLlmText(llmResponse.text) ?: ""
+                    eventLogger.logComplete(iterations, totalTokens, cleanText)
+                    callback.onComplete(iterations, cleanText.ifEmpty { ClawApplication.instance.getString(R.string.agent_task_completed) }, totalTokens)
                     return
                 }
 
@@ -769,7 +770,7 @@ class DefaultAgentService : AgentService {
 
                     // finish 工具 → 任务完成
                     if (toolName == "finish" && result.isSuccess) {
-                        val finishData = result.data
+                        val finishData = sanitizeLlmText(result.data)
                         eventLogger.logComplete(iterations, totalTokens, finishData ?: "Task completed")
                         callback.onComplete(iterations, finishData ?: ClawApplication.instance.getString(R.string.agent_task_completed), totalTokens)
                         return
@@ -878,6 +879,42 @@ class DefaultAgentService : AgentService {
 
     override fun cancel() {
         cancelled.set(true)
+    }
+
+    /**
+     * 清洗 LLM 返回的文本，去除控制字符和非法 UTF-8 序列。
+     *
+     * 某些 LLM 模型 / 代理在流式或非流式响应中可能返回：
+     * - Unicode 替换字符 U+FFFD
+     * - 控制字符（除换行/制表外）
+     * - 零宽字符（zero-width space / joiner / non-joiner）
+     * - BOM 或其他不可见字符
+     *
+     * 这些字符在 Android TextView 中会显示为乱码方块。
+     */
+    private fun sanitizeLlmText(text: String?): String? {
+        if (text == null) return null
+        val sb = StringBuilder(text.length)
+        for (i in text.indices) {
+            val c = text[i]
+            when {
+                // 保留正常换行和制表
+                c == '\n' || c == '\r' || c == '\t' -> sb.append(c)
+                // 跳过控制字符 (C0: 0x00-0x1F, DEL: 0x7F, C1: 0x80-0x9F)
+                c.code in 0x00..0x1F -> { /* skip */ }
+                c.code == 0x7F -> { /* skip DEL */ }
+                c.code in 0x80..0x9F -> { /* skip C1 control */ }
+                // 跳过 Unicode 替换字符
+                c == '\uFFFD' -> { /* skip */ }
+                // 跳过零宽字符
+                c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\uFEFF' -> { /* skip */ }
+                // 跳过 BOM
+                c == '\uFEFF' -> { /* skip */ }
+                // 保留其他所有字符
+                else -> sb.append(c)
+            }
+        }
+        return sb.toString().trim()
     }
 
     override fun shutdown() {

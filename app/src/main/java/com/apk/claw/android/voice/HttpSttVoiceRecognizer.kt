@@ -1,10 +1,12 @@
 package com.apk.claw.android.voice
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import kotlinx.coroutines.*
@@ -78,11 +80,47 @@ class HttpSttVoiceRecognizer(private val context: Context) {
         get() = isRecording.get()
 
     /**
+     * 检查录音权限是否已授予
+     */
+    private fun checkPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context, android.Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * 检查 STT 配置是否完整
+     * @return null 表示配置正常，否则返回错误提示
+     */
+    private fun checkSttConfig(): String? {
+        val baseUrl = KVUtils.getSttBaseUrl().trimEnd('/')
+        if (baseUrl.isEmpty()) {
+            return "请先配置 STT（设置 > 模型 > STT 配置）"
+        }
+        return null
+    }
+
+    /**
      * 开始录音
      */
     fun startRecording() {
         if (isRecording.get()) {
             XLog.w(TAG, "Already recording")
+            return
+        }
+
+        // 前置检查：STT 配置
+        val configError = checkSttConfig()
+        if (configError != null) {
+            listener?.onError(configError)
+            XLog.e(TAG, configError)
+            return
+        }
+
+        // 前置检查：录音权限
+        if (!checkPermission()) {
+            listener?.onError("录音权限不足，请在设置中授予录音权限")
+            XLog.e(TAG, "RECORD_AUDIO permission not granted")
             return
         }
 
@@ -103,8 +141,13 @@ class HttpSttVoiceRecognizer(private val context: Context) {
             )
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                listener?.onError("录音器初始化失败")
-                XLog.e(TAG, "AudioRecord failed to initialize")
+                val errorMsg = if (!checkPermission()) {
+                    "录音权限不足，请在设置中授予录音权限后重试"
+                } else {
+                    "录音器初始化失败，请检查是否有其他应用占用麦克风"
+                }
+                listener?.onError(errorMsg)
+                XLog.e(TAG, "AudioRecord failed to initialize (state=${audioRecord?.state})")
                 audioRecord?.release()
                 audioRecord = null
                 return

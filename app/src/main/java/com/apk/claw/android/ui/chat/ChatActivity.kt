@@ -1129,7 +1129,7 @@ class ChatActivity : BaseActivity() {
                 }
                 // 流式完成：确保最终状态刷新并保存
                 runOnUiThread {
-                    val answer = stripThinkTags(sb.toString())
+                    val answer = sanitizeText(stripThinkTags(sb.toString()))
                     adapter.updateLastMessage(answer.ifEmpty { getString(R.string.chat_local_model_generating) })
                     userScrolledUp = false
                     rvMessages.scrollToPosition(adapter.itemCount - 1)
@@ -1285,6 +1285,26 @@ class ChatActivity : BaseActivity() {
             btn.setImageResource(R.drawable.ic_volume_off)
             btn.imageTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.colorTextSecondary))
         }
+    }
+
+    /**
+     * 清洗文本中的控制字符和乱码字符，防止在 TextView 中显示为方块。
+     * 保留换行、制表等正常格式字符。
+     */
+    private fun sanitizeText(text: String): String {
+        val sb = StringBuilder(text.length)
+        for (c in text) {
+            when {
+                c == '\n' || c == '\r' || c == '\t' -> sb.append(c)
+                c.code in 0x00..0x1F -> { /* skip C0 control */ }
+                c.code == 0x7F -> { /* skip DEL */ }
+                c.code in 0x80..0x9F -> { /* skip C1 control */ }
+                c == '\uFFFD' -> { /* skip replacement char */ }
+                c == '\u200B' || c == '\u200C' || c == '\u200D' || c == '\uFEFF' -> { /* skip zero-width / BOM */ }
+                else -> sb.append(c)
+            }
+        }
+        return sb.toString().trim()
     }
 
     data class ChatMessage(

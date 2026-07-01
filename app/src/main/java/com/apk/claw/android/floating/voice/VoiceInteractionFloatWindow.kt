@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -311,6 +312,20 @@ object VoiceInteractionFloatWindow {
                 voiceController?.stopListening()
             } else {
                 // 空闲 → 点击开始聆听
+                // 前置检查：录音权限
+                val app = appRef
+                if (app != null && androidx.core.content.ContextCompat.checkSelfPermission(
+                        app, android.Manifest.permission.RECORD_AUDIO
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    showMessage("录音权限不足，请在系统设置中授予录音权限")
+                    return@setOnClickListener
+                }
+                // 前置检查：STT 配置
+                if (!KVUtils.hasSttConfig()) {
+                    showMessage("请先配置 STT（设置 > 模型 > STT 配置）")
+                    return@setOnClickListener
+                }
                 voiceController?.startListening()
             }
         }
