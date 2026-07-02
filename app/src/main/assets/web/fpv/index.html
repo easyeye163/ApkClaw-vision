@@ -327,7 +327,7 @@ function initScene() {
 
     var camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.5, 2000);
     camera.position.set(0, 25, 0);
-    camera.lookAt(0, 25, -100);
+    camera.rotation.order='YXZ';
     game.camera = camera;
 
     // Sky
@@ -482,9 +482,8 @@ function animate() {
   var terrH=getTerrainHeight(game.camera.position.x,game.camera.position.z);
   if (game.camera.position.y<terrH+3){game.camera.position.y=terrH+3;game.velocity.y=Math.max(game.velocity.y,0);}
   if (game.camera.position.y>200) game.camera.position.y=200;
-  var lookDir=new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(1,0,0),game.pitch).applyAxisAngle(new THREE.Vector3(0,1,0),game.yaw);
-  game.camera.lookAt(game.camera.position.clone().add(lookDir));
-  game.camera.rotation.z=game.roll;
+  game.camera.rotation.order='YXZ';
+  game.camera.rotation.set(game.pitch, game.yaw, game.roll);
   game.clouds.forEach(function(cl){cl.position.x+=cl.userData.speed;if(cl.position.x>cl.userData.origX+200)cl.position.x=cl.userData.origX-200;});
   var camPos=game.camera.position;
   game.chests.forEach(function(ch){
@@ -780,7 +779,7 @@ function startGame() {
 function restartGame() {
   $completion.classList.remove('visible');
   game.chestsCollected=0;game.speed=0.5;game.yaw=0;game.pitch=0;game.roll=0;
-  game.velocity.set(0,0,0);game.camera.position.set(0,25,0);game.camera.lookAt(0,25,-100);
+  game.velocity.set(0,0,0);game.camera.position.set(0,25,0);game.camera.rotation.order='YXZ';game.camera.rotation.set(0,0,0);
   clearDynamicObjects();
   game.chests.forEach(function(ch){if(ch.userData.collected){ch.userData.collected=false;game.scene.add(ch);}});
 }
