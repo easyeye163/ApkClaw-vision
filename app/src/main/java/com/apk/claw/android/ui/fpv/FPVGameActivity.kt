@@ -15,6 +15,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.apk.claw.android.agent.langchain.http.OkHttpClientBuilderAdapter
@@ -22,7 +23,6 @@ import com.apk.claw.android.base.BaseActivity
 import com.apk.claw.android.server.LocalWebServer
 import com.apk.claw.android.base.BaseApp
 import com.apk.claw.android.floating.voice.VoiceInteractionFloatWindow
-import com.apk.claw.android.ui.chat.PermissionRequestActivity
 import com.apk.claw.android.utils.KVUtils
 import com.apk.claw.android.utils.XLog
 import dev.langchain4j.agent.tool.ToolSpecification
@@ -54,6 +54,15 @@ class FPVGameActivity : BaseActivity() {
     private lateinit var webView: WebView
     private var localServer: LocalWebServer? = null
     private var chatModel: dev.langchain4j.model.chat.ChatModel? = null
+
+    /** 进入游戏前预申请录音权限 */
+    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private fun preRequestAudioPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     private val SYSTEM_PROMPT = """你是一个3D世界的AI建造助手，用户用自然语言描述想建造的物体，你用工具函数在3D世界中创建。
 
@@ -204,6 +213,8 @@ addCompositeObject → parts: [{type:box,ox:0,oy:2,oz:0,w:20,h:0.5,d:3,color:GRA
             override fun onConsoleMessage(msg: ConsoleMessage?): Boolean { XLog.d(TAG, "JS: ${msg?.message()}"); return true }
         }
         webView.loadUrl("http://127.0.0.1:$SERVER_PORT/")
+        // 进入游戏前预申请录音权限，避免游戏中申请导致黑屏
+        preRequestAudioPermission()
     }
 
     override fun isApplyStatusBarPadding() = false
@@ -245,31 +256,11 @@ addCompositeObject → parts: [{type:box,ox:0,oy:2,oz:0,w:20,h:0.5,d:3,color:GRA
         @JavascriptInterface fun vibrate(ms: Long) { try { val v = getSystemService(Vibrator::class.java); if (Build.VERSION.SDK_INT>=Build.VERSION_CODES.O) v.vibrate(VibrationEffect.createOneShot(ms,VibrationEffect.DEFAULT_AMPLITUDE)) else @Suppress("DEPRECATION") v.vibrate(ms) } catch (_:Exception) {} }
 
         /**
-         * 弹出/关闭语音悬浮框，首次点击时检查并申请录音权限
+         * 弹出/关闭语音悬浮框（权限已在onCreate中预申请）
          */
         @JavascriptInterface
         fun showVoiceFloat() {
-            runOnUiThread {
-                try {
-                    // 检查录音权限，未授权则弹出系统权限申请弹窗
-                    if (ContextCompat.checkSelfPermission(
-                            this@FPVGameActivity,
-                            Manifest.permission.RECORD_AUDIO
-                        ) != PackageManager.PERMISSION_GRANTED
-                    ) {
-                        PermissionRequestActivity.requestPermission(
-                            this@FPVGameActivity,
-                            Manifest.permission.RECORD_AUDIO
-                        ) { granted ->
-                            if (granted) doShowVoiceFloat()
-                        }
-                        return@runOnUiThread
-                    }
-                    doShowVoiceFloat()
-                } catch (e: Exception) {
-                    XLog.e(TAG, "showVoiceFloat: ${e.message}")
-                }
-            }
+            runOnUiThread { doShowVoiceFloat() }
         }
 
         private fun doShowVoiceFloat() {
@@ -293,6 +284,6 @@ addCompositeObject → parts: [{type:box,ox:0,oy:2,oz:0,w:20,h:0.5,d:3,color:GRA
 
     private fun callJs(id: String, data: String) {
         val encoded = android.util.Base64.encodeToString(data.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        runOnUiThread { webView.evaluateJavascript("window.__fpv_llmCallback('$id', atob('$encoded'));", null) }
+        runOnUiThread { webView.evaluateJavascript("window.__fpv_llmCallback('$id', '$encoded');", null) }
     }
 }

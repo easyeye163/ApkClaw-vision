@@ -269,7 +269,10 @@ var game = {
 
 /* ─── LLM Callback System ─── */
 window.__fpv_llmCallbacks = {};
-window.__fpv_llmCallback = function(id, result) {
+window.__fpv_llmCallback = function(id, base64Result) {
+  /* 正确解码 UTF-8 Base64，避免中文乱码 */
+  var result;
+  try { result = decodeURIComponent(escape(atob(base64Result))); } catch(e) { try { result = atob(base64Result); } catch(e2) { result = base64Result; } }
   var cb = window.__fpv_llmCallbacks[id];
   if (cb) { delete window.__fpv_llmCallbacks[id]; cb(result); }
 };
@@ -564,7 +567,9 @@ function initJoystick(side, container) {
       game.keys['s'] = state.y > 0.3;
       game.keys['a'] = state.x < -0.3;
       game.keys['d'] = state.x > 0.3;
-      game.keys[' '] = false; game.keys['shift'] = false;
+      /* 左摇杆同时控制升降：上推=上升，下拉=下降 */
+      game.keys[' '] = state.y < -0.3;
+      game.keys['shift'] = state.y > 0.3;
     } else {
       game.pitch = -state.y * 0.3;
       var targetRoll = -state.x * 0.4;
