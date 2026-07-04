@@ -55,8 +55,8 @@ canvas{display:block;width:100%;height:100%;}
   color:#fff;font-size:.75rem;font-weight:600;cursor:pointer;
   pointer-events:auto;display:flex;align-items:center;gap:6px;
   -webkit-tap-highlight-color:transparent;user-select:none;
-  transition:background .2s,transform .15s;
-  opacity:0;transition:opacity .5s ease,background .2s,transform .15s;
+  transition:opacity .5s ease,background .2s,transform .15s;
+  opacity:0;
 }
 #modeToggle.visible{opacity:1;}
 #modeToggle:active{transform:scale(.93);}
@@ -100,16 +100,14 @@ canvas{display:block;width:100%;height:100%;}
 #chatClose:hover{color:rgba(255,255,255,.9);}
 #chatMessages{
   flex:1;overflow-y:auto;padding:10px 12px;
-  will-change:transform;
-  -webkit-overflow-scrolling:touch;
+  will-change:transform;-webkit-overflow-scrolling:touch;
 }
 #chatMessages::-webkit-scrollbar{width:4px;}
 #chatMessages::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:4px;}
 .msg{
   margin-bottom:8px;padding:8px 12px;border-radius:10px;
   font-size:.82rem;line-height:1.55;word-wrap:break-word;
-  opacity:0;transform:translateY(8px);
-  max-width:100%;
+  opacity:0;transform:translateY(8px);max-width:100%;
 }
 .msg.user{background:rgba(74,124,201,.3);color:#c8deff;align-self:flex-end;margin-left:20%;}
 .msg.bot{background:rgba(255,255,255,.07);color:rgba(255,255,255,.85);margin-right:12%;}
@@ -142,8 +140,7 @@ canvas{display:block;width:100%;height:100%;}
   position:fixed;top:80px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:70;
   background:rgba(249,168,37,.92);color:#1a1a2e;padding:10px 24px;border-radius:50px;
   font-weight:700;font-size:.95rem;pointer-events:none;
-  opacity:0;transition:opacity .4s,transform .4s;
-  white-space:nowrap;
+  opacity:0;transition:opacity .4s,transform .4s;white-space:nowrap;
 }
 #notification.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
@@ -158,6 +155,7 @@ canvas{display:block;width:100%;height:100%;}
 #completionScreen.visible{opacity:1;visibility:visible;}
 #completionScreen h2{font-size:clamp(1.8rem,5vw,3rem);font-weight:800;margin-bottom:.4em;color:#f9a825;}
 #completionScreen p{font-size:1.05rem;opacity:.8;margin-bottom:1.5em;}
+#completionScreen .time-result{font-size:1.3rem;color:#ffd54f;margin-bottom:1.5em;font-weight:700;}
 #restartBtn{
   padding:.8em 2.5em;font-size:1rem;font-weight:700;border:none;border-radius:50px;
   background:linear-gradient(135deg,#4a7cc9,#2d4a8c);color:#fff;cursor:pointer;
@@ -210,6 +208,9 @@ canvas{display:block;width:100%;height:100%;}
   <div class="hud-box"><span class="label">宝箱</span><span class="val" id="hudChests">0/12</span></div>
 </div>
 
+<!-- 飞行模式切换按钮 -->
+<button id="modeToggle" aria-label="飞行模式"><span class="mode-dot stable"></span>自稳模式</button>
+
 <!-- 聊天面板 -->
 <div id="chatPanel">
   <div id="chatHeader"><span>AI 助手</span><button id="chatClose" aria-label="关闭">&times;</button></div>
@@ -228,6 +229,7 @@ canvas{display:block;width:100%;height:100%;}
 <div id="completionScreen">
   <h2>全部宝箱已找到！</h2>
   <p>你探索了世界的每一个角落，干得漂亮，飞行员！</p>
+  <div class="time-result" id="timeResult"></div>
   <button id="restartBtn">再飞一次</button>
 </div>
 
@@ -240,9 +242,6 @@ canvas{display:block;width:100%;height:100%;}
   <div class="joystick-base"><div class="joystick-knob"></div></div>
   <div class="joystick-label">俯仰/翻滚</div>
 </div>
-
-<!-- 飞行模式切换按钮 -->
-<button id="modeToggle" aria-label="飞行模式"><span class="mode-dot stable"></span>自稳模式</button>
 
 <!-- AI对话浮动按钮（独立于面板，始终可见） -->
 <button id="chatToggle" aria-label="AI助手">&#x1f4ac;</button>
@@ -261,16 +260,16 @@ var game = {
   keys: {},
   speed: 0.5, maxSpeed: 1.8, accel: 0.04, friction: 0.97,
   yaw: 0, pitch: 0, roll: 0,
-  flightMode: 'stable', /* 'stable'=自稳模式, 'manual'=手动模式 */
-  STABLE_PITCH_LIMIT: 0.52, /* ~30度 */
-  STABLE_ROLL_LIMIT: 0.35, /* ~20度 */
+  flightMode: 'stable',
+  STABLE_PITCH_LIMIT: 0.52,
+  STABLE_ROLL_LIMIT: 0.35,
+  startTime: 0,
   clock: new THREE.Clock()
 };
 
 /* ─── LLM Callback System ─── */
 window.__fpv_llmCallbacks = {};
 window.__fpv_llmCallback = function(id, base64Result) {
-  /* 正确解码 UTF-8 Base64，避免中文乱码 */
   var result;
   try { result = decodeURIComponent(escape(atob(base64Result))); } catch(e) { try { result = atob(base64Result); } catch(e2) { result = base64Result; } }
   var cb = window.__fpv_llmCallbacks[id];
@@ -294,10 +293,11 @@ var $chatClose     = document.getElementById('chatClose');
 var $voiceBtn      = document.getElementById('voiceBtn');
 var $notification  = document.getElementById('notification');
 var $completion    = document.getElementById('completionScreen');
+var $timeResult    = document.getElementById('timeResult');
 var $restartBtn    = document.getElementById('restartBtn');
 var $joystickLeft  = document.getElementById('joystickLeft');
 var $joystickRight = document.getElementById('joystickRight');
-var $modeToggle = document.getElementById('modeToggle');
+var $modeToggle    = document.getElementById('modeToggle');
 
 /* ─── Helpers ─── */
 function notify(text, duration) {
@@ -305,6 +305,13 @@ function notify(text, duration) {
   $notification.textContent = text;
   $notification.classList.add('show');
   setTimeout(function(){ $notification.classList.remove('show'); }, duration);
+}
+
+function formatTime(ms) {
+  var s = Math.floor(ms / 1000);
+  var m = Math.floor(s / 60);
+  s = s % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
 }
 
 function isMobile() {
@@ -330,7 +337,7 @@ function initScene() {
 
     var camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.5, 2000);
     camera.position.set(0, 25, 0);
-    camera.rotation.order='YXZ';
+    camera.rotation.order = 'YXZ';
     game.camera = camera;
 
     // Sky
@@ -496,7 +503,11 @@ function animate() {
     if(camPos.distanceTo(ch.position)<5){
       ch.userData.collected=true;game.scene.remove(ch);game.chestsCollected++;
       notify('发现宝箱！('+game.chestsCollected+'/'+game.totalChests+')');
-      if(game.chestsCollected>=game.totalChests) setTimeout(function(){$completion.classList.add('visible');},1000);
+      if(game.chestsCollected>=game.totalChests) {
+        var elapsed = Date.now() - game.startTime;
+        $timeResult.textContent = '总用时 ' + formatTime(elapsed);
+        setTimeout(function(){ $completion.classList.add('visible'); },1000);
+      }
     }
   });
   $hudSpeed.textContent=(sp*100).toFixed(0);
@@ -653,7 +664,7 @@ function tryLocalCommand(text) {
   var cmds=[['add tree','addTree','种了一棵树！'],['add rock','addRock','放了一块石头！'],['add cloud','addCloud','召唤了一朵云！'],['add house','addHouseBody','建了一栋房子！'],['add flower','addFlower','种了花！'],['add crate','addCrate','放了一个箱子！'],['add sign','addSign','放了一个告示牌！'],['add lamp','addLamp','安装了一盏路灯！']];
   var found=false;
   for(var i=0;i<cmds.length;i++){if(cmd.indexOf(cmds[i][0])>=0){executeTool(cmds[i][1],{});addMsg(cmds[i][2],'bot');found=true;break;}}
-  if(!found){if(cmd.indexOf('clear')>=0||cmd.indexOf('remove all')>=0){executeTool('clearDynamicObjects',{});addMsg('已清除所有动态物体。','bot');}else addMsg('我可以帮你建造场景！试试："建一棵树"、"放一块石头"、"盖一栋房子"、"清除所有"。','bot');}
+  if(!found){if(cmd.indexOf('clear')>=0||cmd.indexOf('remove all')>=0||cmd.indexOf('清除')>=0){executeTool('clearDynamicObjects',{});addMsg('已清除所有动态物体。','bot');}else addMsg('我可以帮你建造场景！试试："建一棵树"、"放一块石头"、"盖一栋房子"、"清除所有"。','bot');}
 }
 
 /* ─── Color Resolver ─── */
@@ -691,15 +702,15 @@ function executeTool(name, args) {
     case 'executeCode': obj=executeCode(args); break;
     case 'removeDynamic': removeDynamic(args); return;
     case 'clearDynamicObjects': clearDynamicObjects(); return;
-    case 'addCompositeObject': obj=addCompositeObject(px,py,pz,args.parts); break;
+    case 'addCompositeObject': obj=addCompositeObject(px,py,pz,args.parts,args.rotationY); break;
     default: addMsg('未知工具: '+name,'system'); return;
   }
   if (obj) { game.dynamicObjects.push(obj); game.scene.add(obj); }
 }
 
-function addCompositeObject(x, y, z, parts) {
+function addCompositeObject(x, y, z, parts, rotationY) {
   if (!parts) return null;
-  if (typeof parts === 'string') { try { parts = JSON.parse(parts); } catch(e) { return null; } }
+  if (typeof parts === 'string') { try { parts = JSON.parse(parts); } catch(e) { console.error('addCompositeObject parts parse error:', e); return null; } }
   if (!Array.isArray(parts)) return null;
   var group = new THREE.Group();
   for (var i = 0; i < parts.length; i++) {
@@ -729,9 +740,7 @@ function addCompositeObject(x, y, z, parts) {
     }
   }
   group.position.set(x, y, z);
-  if (args) {
-    // rotationY from args
-  }
+  if (rotationY) group.rotation.y = (rotationY * Math.PI / 180);
   return group;
 }
 
@@ -777,6 +786,7 @@ function startGame() {
   $hud.classList.add('visible');
   $modeToggle.classList.add('visible');
   game.started = true;
+  game.startTime = Date.now();
   game.clock.start();
   addMsg('欢迎来到灵境！左摇杆控制飞行方向和油门，右摇杆控制俯仰翻滚。点击右上角 💬 打开AI助手，用文字或语音描述你想建造的场景。', 'bot');
 }
@@ -784,7 +794,9 @@ function startGame() {
 function restartGame() {
   $completion.classList.remove('visible');
   game.chestsCollected=0;game.speed=0.5;game.yaw=0;game.pitch=0;game.roll=0;
-  game.velocity.set(0,0,0);game.camera.position.set(0,25,0);game.camera.rotation.order='YXZ';game.camera.rotation.set(0,0,0);
+  game.velocity.set(0,0,0);game.camera.position.set(0,25,0);
+  game.camera.rotation.order='YXZ';game.camera.rotation.set(0,0,0);
+  game.startTime = Date.now();
   clearDynamicObjects();
   game.chests.forEach(function(ch){if(ch.userData.collected){ch.userData.collected=false;game.scene.add(ch);}});
 }

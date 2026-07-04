@@ -32,7 +32,6 @@ import dev.langchain4j.data.message.SystemMessage
 import dev.langchain4j.data.message.UserMessage
 import dev.langchain4j.model.chat.request.ChatRequest
 import dev.langchain4j.model.chat.request.json.JsonIntegerSchema
-import dev.langchain4j.model.chat.request.json.JsonNumberSchema
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import dev.langchain4j.model.chat.request.json.JsonStringSchema
 import dev.langchain4j.model.openai.OpenAiChatModel
