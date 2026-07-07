@@ -126,6 +126,15 @@
             android:contentDescription="TTS语音朗读"
             app:tint="@color/colorTextSecondary" />
 
+        <ImageView
+            android:id="@+id/btnDiffusion"
+            android:layout_width="36pt"
+            android:layout_height="36pt"
+            android:padding="8pt"
+            android:src="@drawable/ic_palette"
+            android:contentDescription="AI生图"
+            app:tint="@color/colorTextSecondary" />
+
         <EditText
             android:id="@+id/etMessage"
             android:layout_width="0dp"

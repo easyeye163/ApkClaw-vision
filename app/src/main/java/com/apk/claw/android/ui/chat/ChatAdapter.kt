@@ -35,6 +35,15 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.MessageViewHolder>() {
         }
     }
 
+    /** Update the last message's image data (for diffusion generation progress) */
+    fun updateLastMessageImage(imageData: ByteArray) {
+        if (messages.isNotEmpty()) {
+            val lastIndex = messages.size - 1
+            messages[lastIndex] = messages[lastIndex].copy(imageData = imageData)
+            notifyItemChanged(lastIndex)
+        }
+    }
+
     fun getMessages(): List<ChatActivity.ChatMessage> = messages.toList()
 
     fun clearAll() {
@@ -89,13 +98,23 @@ class ChatAdapter : RecyclerView.Adapter<ChatAdapter.MessageViewHolder>() {
                     ivUserImage.visibility = View.GONE
                 }
             } else {
-                // All agent messages rendered with Markdown
+                // Agent message text
                 if (markwon != null && text.isNotEmpty()) {
                     markwon.setMarkdown(tvAgentText, text)
                 } else {
                     tvAgentText.text = text
                 }
-                ivAgentImage.visibility = View.GONE
+                // Agent-generated image (e.g. from MNN-Diffusion)
+                if (message.imageData != null) {
+                    ivAgentImage.visibility = View.VISIBLE
+                    val bitmap = BitmapFactory.decodeByteArray(message.imageData, 0, message.imageData.size)
+                    ivAgentImage.setImageBitmap(bitmap)
+                    ivAgentImage.setOnClickListener {
+                        // TODO: 点击放大查看
+                    }
+                } else {
+                    ivAgentImage.visibility = View.GONE
+                }
             }
         }
     }

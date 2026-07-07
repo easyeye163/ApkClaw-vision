@@ -48,6 +48,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import com.apk.claw.android.local.diffusion.DiffusionEngine
+import com.apk.claw.android.local.diffusion.DiffusionState
 
 class ChatActivity : BaseActivity() {
 
@@ -118,6 +120,8 @@ class ChatActivity : BaseActivity() {
     private lateinit var ivPreview: ImageView
     private lateinit var btnRemovePreview: ImageView
     private lateinit var btnVoice: ImageView
+    private lateinit var btnDiffusion: ImageView
+    private var diffusionEnabled = false
     private lateinit var switchCloudMode: Switch
     private lateinit var switchLocalModel: Switch
     private lateinit var tvConnectionStatus: android.widget.TextView
@@ -438,6 +442,50 @@ class ChatActivity : BaseActivity() {
         updateModeHint()
         btnVoice = findViewById(R.id.btnVoice)
         btnVoice.setOnClickListener { toggleVoiceInput() }
+        // AI 生图按钮（MNN-Diffusion）
+        btnDiffusion = findViewById(R.id.btnDiffusion)
+        updateDiffusionButton()
+        btnDiffusion.setOnClickListener {
+            diffusionEnabled = !diffusionEnabled
+            updateDiffusionButton()
+            if (diffusionEnabled) {
+                // 确保模型已加载
+                val engine = DiffusionEngine.getInstance(this)
+                when (val s = engine.state.value) {
+                    is DiffusionState.NativeNotAvailable -> {
+                        Toast.makeText(this, s.message, Toast.LENGTH_LONG).show()
+                        diffusionEnabled = false
+                        updateDiffusionButton()
+                    }
+                    is DiffusionState.NativeLoaded, is DiffusionState.Uninitialized -> {
+                        val modelPath = engine.modelPath
+                        if (modelPath.isBlank()) {
+                            Toast.makeText(this, "请先在设置中配置 MNN-Diffusion 模型路径", Toast.LENGTH_LONG).show()
+                            diffusionEnabled = false
+                            updateDiffusionButton()
+                        } else {
+                            lifecycleScope.launch {
+                                try {
+                                    engine.loadModel()
+                                    Toast.makeText(this@ChatActivity, "AI生图模型已就绪", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(this@ChatActivity, "模型加载失败: ${e.message}", Toast.LENGTH_LONG).show()
+                                    diffusionEnabled = false
+                                    updateDiffusionButton()
+                                }
+                            }
+                        }
+                    }
+                    is DiffusionState.Ready -> {
+                        Toast.makeText(this, "AI生图已开启，输入英文描述后发送", Toast.LENGTH_SHORT).show()
+                    }
+                    is DiffusionState.LoadingModel -> {
+                        Toast.makeText(this, "模型正在加载中...", Toast.LENGTH_SHORT).show()
+                    }
+                    else -> {}
+                }
+            }
+        }
         // TTS 语音朗读按钮
         val btnTts = findViewById<ImageView>(R.id.btnTts)
         updateTtsButton(btnTts)
@@ -995,8 +1043,9 @@ class ChatActivity : BaseActivity() {
             text
         }
 
-        // 根据开关决定走本地模型、云端还是本地 LLM
+        // 根据开关决定走本地模型、云端、AI生图还是默认 Agent
         when {
+            diffusionEnabled -> sendDiffusionMessage(text)
             switchLocalModel.isChecked -> sendLocalModelMessage(finalText, imageDataToSend)
             switchCloudMode.isChecked -> sendCloudMessage(finalText)
             else -> sendLocalMessage(finalText, imageDataToSend)
@@ -1143,6 +1192,81 @@ class ChatActivity : BaseActivity() {
                     rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
                     persistChatHistory()
                 }
+            }
+        }
+    }
+
+    /**
+     * AI 生图模式：使用 MNN-Diffusion 本地生成图片
+     */
+    private fun sendDiffusionMessage(prompt: String) {
+        val engine = DiffusionEngine.getInstance(this)
+
+        if (engine.state.value !is DiffusionState.Ready) {
+            Toast.makeText(this, "AI生图模型未就绪，请先点击调色板按钮加载模型", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val thinkingMessage = ChatMessage(
+            text = "正在生成图片 (0%)...",
+            isUser = false,
+            timestamp = System.currentTimeMillis(),
+            isThinking = true
+        )
+        adapter.addMessage(thinkingMessage)
+        rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+
+        lifecycleScope.launch {
+            try {
+                val bitmap = engine.generate(prompt) { progress ->
+                    runOnUiThread {
+                        if (progress > 0) {
+                            adapter.updateLastMessage("正在生成图片 ($progress%)...")
+                            if (!userScrolledUp) {
+                                rvMessages.scrollToPosition(adapter.itemCount - 1)
+                            }
+                        }
+                    }
+                }
+
+                runOnUiThread {
+                    if (bitmap != null) {
+                        val stream = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+                        val imageData = stream.toByteArray()
+                        adapter.updateLastMessage("生成完成\n$prompt")
+                        adapter.updateLastMessageImage(imageData)
+                        bitmap.recycle()
+                    } else {
+                        adapter.updateLastMessage("图片生成失败，请检查模型路径是否正确")
+                    }
+                    userScrolledUp = false
+                    rvMessages.scrollToPosition(adapter.itemCount - 1)
+                    persistChatHistory()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    adapter.updateLastMessage("生图出错: ${e.message}")
+                    rvMessages.smoothScrollToPosition(adapter.itemCount - 1)
+                    persistChatHistory()
+                }
+            }
+        }
+    }
+
+    /** 更新 AI 生图按钮的视觉状态 */
+    private fun updateDiffusionButton() {
+        if (::btnDiffusion.isInitialized) {
+            if (diffusionEnabled) {
+                btnDiffusion.imageTintList = android.content.res.ColorStateList.valueOf(
+                    getColor(R.color.colorBrandPrimary)
+                )
+                btnDiffusion.alpha = 1.0f
+            } else {
+                btnDiffusion.imageTintList = android.content.res.ColorStateList.valueOf(
+                    getColor(R.color.colorTextSecondary)
+                )
+                btnDiffusion.alpha = 0.6f
             }
         }
     }

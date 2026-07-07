@@ -34,27 +34,14 @@ android {
         applicationId = "com.apk.claw.android"
         minSdk = 28
         targetSdk = 36
-        versionCode = 85
-        versionName = "0.0.85"
+        versionCode = 90
+        versionName = "0.0.90"
         buildConfigField("String", "VERSION_INFO", getVersionGit())
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             abiFilters.add("arm64-v8a")
         }
-
-        // externalNativeBuild disabled — using prebuilt .so in jniLibs
-        // externalNativeBuild {
-        //     cmake {
-        //         arguments += "-DCMAKE_BUILD_TYPE=Release"
-        //         arguments += "-DBUILD_SHARED_LIBS=ON"
-        //         arguments += "-DLLAMA_BUILD_COMMON=ON"
-        //         arguments += "-DLLAMA_OPENSSL=OFF"
-        //         arguments += "-DGGML_NATIVE=OFF"
-        //         arguments += "-DGGML_LLAMAFILE=ON"
-        //         arguments += "-DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16"
-        //     }
-        // }
     }
 
 
@@ -93,14 +80,6 @@ android {
         buildConfig = true
     }
 
-    // externalNativeBuild disabled — using prebuilt .so in jniLibs
-    // externalNativeBuild {
-    //     cmake {
-    //         path = file("src/main/cpp/CMakeLists.txt")
-    //         version = "3.22.1"
-    //     }
-    // }
-
     packaging {
         resources {
             excludes += setOf(
@@ -110,6 +89,14 @@ android {
                 "META-INF/NOTICE",
                 "META-INF/NOTICE.txt",
             )
+        }
+    }
+
+    // CMake for MNN-Diffusion JNI bridge (separate from prebuilt llama.cpp .so)
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 }

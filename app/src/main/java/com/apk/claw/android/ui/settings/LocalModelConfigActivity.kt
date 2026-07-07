@@ -31,6 +31,10 @@ class LocalModelConfigActivity : BaseActivity() {
 
     companion object {
         private const val TAG = "LocalModelConfig"
+        // MNN-Diffusion 模型在 ModelScope 的仓库 ID
+        private const val DIFFUSION_MS_REPO = "MNN/stable-diffusion-v1-5-mnn-opencl"
+        // 模型文件在本地的存储目录名
+        private const val DIFFUSION_MODEL_DIR = "diffusion_sd1.5_mnn"
     }
 
     private lateinit var tvModelStatus: TextView
@@ -52,7 +56,21 @@ class LocalModelConfigActivity : BaseActivity() {
     private lateinit var btnAddCustom: KButton
     private lateinit var btnRemoveCustom: KButton
 
+    // Diffusion UI views
+    private lateinit var tvDiffusionStatus: TextView
+    private lateinit var tvDiffusionInfo: TextView
+    private lateinit var progressDiffusionDownload: ProgressBar
+    private lateinit var tvDiffusionDownloadProgress: TextView
+    private lateinit var btnDiffusionDownload: com.apk.claw.android.widget.KButton
+    private lateinit var btnDiffusionLoad: com.apk.claw.android.widget.KButton
+    private lateinit var btnDiffusionDelete: com.apk.claw.android.widget.KButton
+    private lateinit var seekbarDiffusionSteps: SeekBar
+    private lateinit var tvDiffusionStepsValue: TextView
+    private lateinit var spinnerDiffusionBackend: android.widget.Spinner
+
     private var downloadJob: Job? = null
+    private var diffusionDownloadJob: Job? = null
+    private var isDiffusionModelLoaded: Boolean = false
     private var isModelLoaded: Boolean = false
     private var selectedModel: LocalModelInfo = LocalModelInfo.DEFAULT_MODEL
     private lateinit var allModels: List<LocalModelInfo>
@@ -118,6 +136,46 @@ class LocalModelConfigActivity : BaseActivity() {
         btnSaveServerConfig.setOnClickListener { saveServerConfig() }
         btnAddCustom.setOnClickListener { addCustomModel() }
         btnRemoveCustom.setOnClickListener { removeCustomModel() }
+
+        // ── Diffusion views ──
+        tvDiffusionStatus = findViewById(R.id.tv_diffusion_status)
+        tvDiffusionInfo = findViewById(R.id.tv_diffusion_info)
+        progressDiffusionDownload = findViewById(R.id.progress_diffusion_download)
+        tvDiffusionDownloadProgress = findViewById(R.id.tv_diffusion_download_progress)
+        btnDiffusionDownload = findViewById(R.id.btn_diffusion_download)
+        btnDiffusionLoad = findViewById(R.id.btn_diffusion_load)
+        btnDiffusionDelete = findViewById(R.id.btn_diffusion_delete)
+        seekbarDiffusionSteps = findViewById(R.id.seekbar_diffusion_steps)
+        tvDiffusionStepsValue = findViewById(R.id.tv_diffusion_steps_value)
+        spinnerDiffusionBackend = findViewById(R.id.spinner_diffusion_backend)
+
+        // 后端选择 Spinner
+        val backendLabels = arrayOf("OpenCL (GPU 推荐)", "CPU")
+        val backendAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, backendLabels)
+        spinnerDiffusionBackend.adapter = backendAdapter
+
+        // Steps SeekBar
+        val savedSteps = com.apk.claw.android.local.diffusion.DiffusionEngine.DEFAULT_STEPS
+        seekbarDiffusionSteps.progress = savedSteps.coerceIn(1, 50)
+        tvDiffusionStepsValue.text = savedSteps.toString()
+        seekbarDiffusionSteps.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onStartTrackingTouch(seekBar: SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar) {}
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                tvDiffusionStepsValue.text = (progress.coerceAtLeast(1)).toString()
+            }
+        })
+
+        // 恢复后端选择
+        val savedBackend = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this).backendType
+        spinnerDiffusionBackend.setSelection(if (savedBackend == com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL) 0 else 1)
+
+        btnDiffusionDownload.setOnClickListener { startDiffusionDownload() }
+        btnDiffusionLoad.setOnClickListener { loadDiffusionModel() }
+        btnDiffusionDelete.setOnClickListener { confirmDeleteDiffusion() }
+        findViewById<com.apk.claw.android.widget.KButton>(R.id.btn_save_diffusion_config).setOnClickListener { saveDiffusionConfig() }
+
+        updateDiffusionUI()
     }
 
     private fun setupModelList() {
@@ -810,9 +868,424 @@ class LocalModelConfigActivity : BaseActivity() {
         }
     }
 
+    // ───────────────────────────────────────────────────────────────────────
+    // MNN-Diffusion 文生图模型
+    // ───────────────────────────────────────────────────────────────────────
+
+    /** Diffusion 模型在本地的存储目录 */
+    private val diffusionModelDir: File
+        get() = File(filesDir, DIFFUSION_MODEL_DIR)
+
+    /** 检查 diffusion 模型目录是否包含所需文件 */
+    private fun isDiffusionModelDownloaded(): Boolean {
+        val dir = diffusionModelDir
+        if (!dir.exists() || !dir.isDirectory) return false
+        // MNN-Diffusion SD 1.5 至少需要这些文件
+        val requiredFiles = listOf("clip_model.mnn", "unet_model.mnn", "vae_decoder_model.mnn")
+        return requiredFiles.all { File(dir, it).exists() }
+    }
+
+    /** 计算已下载模型的总大小 */
+    private fun getDiffusionModelTotalSize(): Long {
+        val dir = diffusionModelDir
+        if (!dir.exists()) return 0L
+        return dir.walkTopDown()
+            .filter { it.isFile }
+            .map { it.length() }
+            .sum()
+    }
+
+    /** 更新 diffusion 模型区域的 UI 状态 */
+    private fun updateDiffusionUI() {
+        val downloaded = isDiffusionModelDownloaded()
+        val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this)
+        val engineReady = engine.state.value is com.apk.claw.android.local.diffusion.DiffusionState.Ready
+
+        // 同步引擎实际状态
+        if (engineReady && downloaded) {
+            isDiffusionModelLoaded = true
+        } else if (engine.state.value is com.apk.claw.android.local.diffusion.DiffusionState.NativeLoaded
+            || engine.state.value is com.apk.claw.android.local.diffusion.DiffusionState.Uninitialized) {
+            isDiffusionModelLoaded = false
+        }
+
+        // 状态文本
+        when {
+            isDiffusionModelLoaded -> {
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_status_ready)
+                tvDiffusionStatus.setTextColor(getColor(R.color.colorTextSecondary))
+            }
+            downloaded -> {
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_status_downloaded)
+                tvDiffusionStatus.setTextColor(getColor(R.color.colorTextSecondary))
+            }
+            else -> {
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_status_not_ready)
+                tvDiffusionStatus.setTextColor(getColor(R.color.colorTextSecondary))
+            }
+        }
+
+        // 文件信息
+        if (downloaded) {
+            val totalSize = getDiffusionModelTotalSize()
+            tvDiffusionInfo.text = getString(R.string.diffusion_model_file_size, formatFileSize(totalSize))
+            tvDiffusionInfo.visibility = View.VISIBLE
+            btnDiffusionDelete.visibility = View.VISIBLE
+        } else {
+            tvDiffusionInfo.visibility = View.GONE
+            btnDiffusionDelete.visibility = View.GONE
+        }
+
+        // 下载按钮
+        btnDiffusionDownload.text = if (downloaded) {
+            getString(R.string.diffusion_model_redownload)
+        } else {
+            getString(R.string.diffusion_model_download)
+        }
+
+        // 加载/卸载按钮
+        btnDiffusionLoad.isEnabled = downloaded
+        btnDiffusionLoad.text = if (isDiffusionModelLoaded) {
+            getString(R.string.diffusion_model_unload)
+        } else {
+            getString(R.string.diffusion_model_load)
+        }
+    }
+
+    /** 保存 diffusion 生图配置 */
+    private fun saveDiffusionConfig() {
+        val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this)
+        engine.defaultSteps = seekbarDiffusionSteps.progress.coerceAtLeast(1)
+        engine.backendType = if (spinnerDiffusionBackend.selectedItemPosition == 0)
+            com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL
+        else
+            com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_CPU
+        Toast.makeText(this, getString(R.string.diffusion_model_config_saved), Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * 发现 ModelScope 仓库中 diffusion 模型的所有文件列表
+     * 递归遍历子目录，返回相对于仓库根目录的路径列表
+     */
+    private fun discoverDiffusionFiles(repoId: String): List<DiffusionFileEntry> {
+        val branches = listOf("master", "main")
+        val allFiles = mutableListOf<DiffusionFileEntry>()
+
+        for (branch in branches) {
+            try {
+                // 递归发现：先获取根目录，再遍历子目录
+                discoverDirRecursive(repoId, branch, "", allFiles)
+                if (allFiles.isNotEmpty()) return allFiles
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {}
+        }
+        return allFiles
+    }
+
+    /** 递归发现目录下的文件 */
+    private fun discoverDirRecursive(
+        repoId: String, branch: String, path: String, result: MutableList<DiffusionFileEntry>
+    ) {
+        val url = "https://modelscope.cn/api/v1/models/$repoId/repo/files?path=/$path&branch=$branch"
+        val request = Request.Builder().url(url).build()
+        val response = apiClient.newCall(request).execute()
+        if (!response.isSuccessful) { response.close(); return }
+        val body = response.body?.string() ?: run { response.close(); return }
+        response.close()
+
+        val rootObj = org.json.JSONObject(body)
+        val dataObj = rootObj.optJSONObject("Data") ?: return
+        val filesArray = dataObj.optJSONArray("Files") ?: return
+
+        for (i in 0 until filesArray.length()) {
+            val obj = filesArray.getJSONObject(i)
+            val name = obj.getString("Name")
+            val size = obj.optLong("Size", 0L)
+            val type = obj.optString("Type", "File")
+
+            val relativePath = if (path.isEmpty()) name else "$path/$name"
+
+            if (type == "Directory" || obj.optBoolean("IsDir", false)) {
+                // 递归进入子目录
+                discoverDirRecursive(repoId, branch, relativePath, result)
+            } else {
+                result.add(DiffusionFileEntry(relativePath, name, size))
+            }
+        }
+    }
+
+    private data class DiffusionFileEntry(
+        val relativePath: String,  // 相对于仓库根目录的路径
+        val fileName: String,
+        val size: Long
+    )
+
+    /** 开始下载 diffusion 模型 */
+    private fun startDiffusionDownload() {
+        if (diffusionDownloadJob?.isActive == true) {
+            Toast.makeText(this, getString(R.string.local_model_downloading), Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val dir = diffusionModelDir
+        if (!dir.exists()) dir.mkdirs()
+
+        btnDiffusionDownload.isEnabled = false
+        progressDiffusionDownload.visibility = View.VISIBLE
+        progressDiffusionDownload.progress = 0
+        tvDiffusionDownloadProgress.visibility = View.VISIBLE
+        tvDiffusionDownloadProgress.text = getString(R.string.diffusion_model_discovering)
+        tvDiffusionStatus.text = getString(R.string.diffusion_model_downloading)
+
+        diffusionDownloadJob = lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // 1. 发现所有文件
+                val files = discoverDiffusionFiles(DIFFUSION_MS_REPO)
+                if (files.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@LocalModelConfigActivity, getString(R.string.diffusion_model_no_files), Toast.LENGTH_LONG).show()
+                        tvDiffusionStatus.text = getString(R.string.diffusion_model_status_not_ready)
+                    }
+                    return@launch
+                }
+
+                // 2. 逐文件下载
+                val totalFiles = files.size
+                val totalSize = files.sumOf { it.size }
+                var downloadedSize = 0L
+
+                for ((index, file) in files.withIndex()) {
+                    // 跳过已存在且大小匹配的文件
+                    val localFile = File(dir, file.relativePath)
+                    val alreadyDownloaded = localFile.exists() && localFile.length() == file.size
+                    if (alreadyDownloaded) {
+                        downloadedSize += file.size
+                    } else {
+                        // 下载此文件
+                        localFile.parentFile?.mkdirs()
+
+                        withContext(Dispatchers.Main) {
+                            tvDiffusionDownloadProgress.text = getString(
+                                R.string.diffusion_model_downloading_file, file.fileName
+                            )
+                        }
+
+                        val encodedPath = file.relativePath.replace(" ", "%20")
+                        val urls = listOf(
+                            "https://modelscope.cn/models/$DIFFUSION_MS_REPO/resolve/master/$encodedPath",
+                            "https://modelscope.cn/models/$DIFFUSION_MS_REPO/resolve/main/$encodedPath"
+                        )
+
+                        downloadDiffusionSingleFile(urls, localFile, file.fileName)
+                        if (localFile.exists()) {
+                            downloadedSize += localFile.length()
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    this@LocalModelConfigActivity,
+                                    getString(R.string.diffusion_model_download_failed, file.fileName),
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }
+
+                    // Update progress
+                    withContext(Dispatchers.Main) {
+                        if (totalSize > 0) {
+                            val progress = ((downloadedSize * 100) / totalSize).toInt()
+                            progressDiffusionDownload.progress = progress
+                            tvDiffusionDownloadProgress.text = getString(
+                                R.string.diffusion_model_download_progress,
+                                file.fileName, index + 1, totalFiles,
+                                formatFileSize(downloadedSize), formatFileSize(totalSize)
+                            )
+                        } else {
+                            tvDiffusionDownloadProgress.text = getString(
+                                R.string.diffusion_model_download_progress_no_total,
+                                file.fileName, index + 1, totalFiles,
+                                formatFileSize(downloadedSize)
+                            )
+                        }
+                    }
+                }
+
+                // 3. 下载完成
+                withContext(Dispatchers.Main) {
+                    progressDiffusionDownload.progress = progressDiffusionDownload.max
+                    tvDiffusionDownloadProgress.text = getString(R.string.diffusion_model_download_complete)
+                    tvDiffusionStatus.text = getString(R.string.diffusion_model_download_complete)
+                    updateDiffusionUI()
+                    Toast.makeText(this@LocalModelConfigActivity, getString(R.string.diffusion_model_download_complete), Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: CancellationException) {
+                withContext(Dispatchers.Main) {
+                    tvDiffusionStatus.text = getString(R.string.diffusion_model_download_cancelled)
+                    updateDiffusionUI()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    tvDiffusionStatus.text = getString(R.string.diffusion_model_download_failed, e.message ?: "")
+                    Toast.makeText(
+                        this@LocalModelConfigActivity,
+                        getString(R.string.diffusion_model_download_failed, e.message ?: ""),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    updateDiffusionUI()
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    progressDiffusionDownload.visibility = View.GONE
+                    tvDiffusionDownloadProgress.visibility = View.GONE
+                    btnDiffusionDownload.isEnabled = true
+                }
+            }
+        }
+    }
+
+    /** 加载/卸载 diffusion 模型 */
+    private fun loadDiffusionModel() {
+        if (isDiffusionModelLoaded) {
+            // 卸载
+            lifecycleScope.launch {
+                try {
+                    val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this@LocalModelConfigActivity)
+                    engine.unloadModel()
+                    isDiffusionModelLoaded = false
+                    updateDiffusionUI()
+                    Toast.makeText(this@LocalModelConfigActivity, getString(R.string.diffusion_model_unload_success), Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this@LocalModelConfigActivity, "卸载失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            return
+        }
+
+        if (!isDiffusionModelDownloaded()) {
+            Toast.makeText(this, getString(R.string.local_model_please_download), Toast.LENGTH_LONG).show()
+            return
+        }
+
+        btnDiffusionLoad.isEnabled = false
+        tvDiffusionStatus.text = getString(R.string.diffusion_model_status_loading)
+
+        lifecycleScope.launch {
+            try {
+                val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this@LocalModelConfigActivity)
+
+                // 检查 native 库是否可用
+                when (val s = engine.state.value) {
+                    is com.apk.claw.android.local.diffusion.DiffusionState.NativeNotAvailable -> {
+                        throw RuntimeException(s.message)
+                    }
+                    is com.apk.claw.android.local.diffusion.DiffusionState.Error -> {
+                        // 可能是之前的错误，尝试重新初始化
+                    }
+                    else -> {}
+                }
+
+                // 保存模型路径并设置后端
+                engine.modelPath = diffusionModelDir.absolutePath
+                engine.backendType = if (spinnerDiffusionBackend.selectedItemPosition == 0)
+                    com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL
+                else
+                    com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_CPU
+
+                // 加载模型（最多 120 秒超时）
+                kotlinx.coroutines.withTimeoutOrNull(120_000) {
+                    engine.loadModel()
+                } ?: run {
+                    throw RuntimeException("模型加载超时（120秒）")
+                }
+
+                isDiffusionModelLoaded = true
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_load_success)
+                Toast.makeText(this@LocalModelConfigActivity, getString(R.string.diffusion_model_load_success), Toast.LENGTH_SHORT).show()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_download_cancelled)
+            } catch (e: Exception) {
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_load_failed, e.message ?: "Unknown")
+                AlertDialog.Builder(this@LocalModelConfigActivity)
+                    .setTitle(getString(R.string.local_model_load_fail_title))
+                    .setMessage(e.message ?: "Unknown error")
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+            updateDiffusionUI()
+        }
+    }
+
+    /** 确认删除 diffusion 模型 */
+    private fun confirmDeleteDiffusion() {
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.diffusion_model_delete_confirm_title))
+            .setMessage(getString(R.string.diffusion_model_delete_confirm_msg))
+            .setPositiveButton(getString(R.string.common_confirm)) { _, _ ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    // 先卸载
+                    if (isDiffusionModelLoaded) {
+                        try {
+                            com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this@LocalModelConfigActivity).unloadModel()
+                        } catch (_: Exception) {}
+                    }
+                    val dir = diffusionModelDir
+                    if (dir.exists()) dir.deleteRecursively()
+                    withContext(Dispatchers.Main) {
+                        isDiffusionModelLoaded = false
+                        updateDiffusionUI()
+                        Toast.makeText(this@LocalModelConfigActivity, getString(R.string.diffusion_model_deleted), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton(getString(R.string.common_cancel), null)
+            .show()
+    }
+
+    /**
+     * 下载单个 diffusion 模型文件（非协程上下文，可安全使用 continue/break）
+     * 尝试多个 URL，成功则写入 localFile
+     */
+    private fun downloadDiffusionSingleFile(urls: List<String>, localFile: File, fileName: String) {
+        var success = false
+        for (url in urls) {
+            if (success) return
+            try {
+                val request = Request.Builder().url(url).build()
+                val response = httpClient.newCall(request).execute()
+                if (!response.isSuccessful) { response.close(); return }
+                val body = response.body
+                if (body == null) { response.close(); return }
+
+                val tempFile = File(localFile.parentFile, "${fileName}.tmp")
+                if (localFile.exists()) localFile.delete()
+
+                body.byteStream().use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        var read: Int
+                        while (input.read(buffer).also { read = it } != -1) {
+                            output.write(buffer, 0, read)
+                        }
+                    }
+                }
+                response.close()
+
+                if (!tempFile.renameTo(localFile)) {
+                    tempFile.copyTo(localFile, overwrite = true)
+                    tempFile.delete()
+                }
+                success = true
+            } catch (_: Exception) {
+                // try next URL
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         downloadJob?.cancel()
+        diffusionDownloadJob?.cancel()
         dismissLoadingDialog()
     }
 }

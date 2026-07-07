@@ -535,4 +535,39 @@
     <string name="local_model_load_fail_title">模型加载失败</string>
     <string name="local_model_mmproj_download_failed">多模态投影文件(mmproj)下载失败，请检查网络后重新下载</string>
     <string name="local_model_mmproj_missing">缺少多模态投影文件(mmproj)，请重新下载模型</string>
+
+    <!-- MNN-Diffusion 文生图模型 -->
+    <string name="diffusion_model_section_title">AI 文生图模型（MNN-Diffusion）</string>
+    <string name="diffusion_model_desc">基于 MNN 推理引擎的 Stable Diffusion 1.5，支持 OpenCL GPU 加速。\n模型来源：MNN/stable-diffusion-v1-5-mnn-opencl（魔搭社区）</string>
+    <string name="diffusion_model_status_not_ready">未下载</string>
+    <string name="diffusion_model_status_downloaded">已下载，可以加载</string>
+    <string name="diffusion_model_status_ready">模型已加载</string>
+    <string name="diffusion_model_status_loading">正在加载模型…</string>
+    <string name="diffusion_model_status_loading_error">加载失败：%s</string>
+    <string name="diffusion_model_download">下载文生图模型</string>
+    <string name="diffusion_model_redownload">重新下载</string>
+    <string name="diffusion_model_delete">删除文生图模型</string>
+    <string name="diffusion_model_load">加载模型</string>
+    <string name="diffusion_model_unload">卸载模型</string>
+    <string name="diffusion_model_downloading">正在下载文生图模型…</string>
+    <string name="diffusion_model_downloading_file">正在下载：%s</string>
+    <string name="diffusion_model_download_progress">%1$s：文件 %2$d/%3$d（%4$s / %5$s）</string>
+    <string name="diffusion_model_download_progress_no_total">%1$s：文件 %2$d/%3$d（%4$s）</string>
+    <string name="diffusion_model_download_complete">文生图模型下载完成</string>
+    <string name="diffusion_model_download_cancelled">下载已取消</string>
+    <string name="diffusion_model_download_failed">文生图模型下载失败：%s</string>
+    <string name="diffusion_model_load_success">文生图模型加载成功</string>
+    <string name="diffusion_model_load_failed">文生图模型加载失败：%s</string>
+    <string name="diffusion_model_unload_success">文生图模型已卸载</string>
+    <string name="diffusion_model_delete_confirm_title">删除文生图模型</string>
+    <string name="diffusion_model_delete_confirm_msg">确定删除文生图模型文件？删除后需要重新下载。</string>
+    <string name="diffusion_model_deleted">文生图模型已删除</string>
+    <string name="diffusion_model_discovering">正在发现模型文件列表…</string>
+    <string name="diffusion_model_discover_failed">发现模型文件失败：%s</string>
+    <string name="diffusion_model_no_files">未找到模型文件</string>
+    <string name="diffusion_model_steps_title">生成步数（Steps）</string>
+    <string name="diffusion_model_backend_title">推理后端</string>
+    <string name="diffusion_model_save_config">保存生图配置</string>
+    <string name="diffusion_model_config_saved">生图配置已保存</string>
+    <string name="diffusion_model_file_size">文件大小：%s</string>
 </resources>
