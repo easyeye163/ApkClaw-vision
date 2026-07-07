@@ -878,8 +878,12 @@ class LocalModelConfigActivity : BaseActivity() {
     private fun isDiffusionModelDownloaded(): Boolean {
         val dir = diffusionModelDir
         if (!dir.exists() || !dir.isDirectory) return false
-        // MNN-Diffusion SD 1.5 至少需要这些文件（可能在子目录中）
-        val requiredFiles = listOf("clip_model.mnn", "unet_model.mnn", "vae_decoder_model.mnn")
+        // MNN-Diffusion SD 1.5 实际文件名（来自 ModelScope MNN/stable-diffusion-v1-5-mnn-opencl）
+        val requiredFiles = listOf(
+            "text_encoder.mnn", "text_encoder.mnn.weight",
+            "unet.mnn", "unet.mnn.weight",
+            "vae_decoder.mnn", "vae_decoder.mnn.weight"
+        )
         val existingNames = dir.walkTopDown().filter { it.isFile }.map { it.name }.toSet()
         return requiredFiles.all { it in existingNames }
     }
