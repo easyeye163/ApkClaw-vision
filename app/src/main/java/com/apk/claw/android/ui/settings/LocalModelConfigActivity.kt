@@ -155,9 +155,6 @@ class LocalModelConfigActivity : BaseActivity() {
         spinnerDiffusionBackend.adapter = backendAdapter
 
         // Steps SeekBar
-        val savedSteps = com.apk.claw.android.local.diffusion.DiffusionEngine.DEFAULT_STEPS
-        seekbarDiffusionSteps.progress = savedSteps.coerceIn(1, 50)
-        tvDiffusionStepsValue.text = savedSteps.toString()
         seekbarDiffusionSteps.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(seekBar: SeekBar) {}
             override fun onStopTrackingTouch(seekBar: SeekBar) {}
@@ -166,15 +163,16 @@ class LocalModelConfigActivity : BaseActivity() {
             }
         })
 
-        // 恢复后端选择
-        val savedBackend = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this).backendType
-        spinnerDiffusionBackend.setSelection(if (savedBackend == com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL) 0 else 1)
-
         btnDiffusionDownload.setOnClickListener { startDiffusionDownload() }
         btnDiffusionLoad.setOnClickListener { loadDiffusionModel() }
         btnDiffusionDelete.setOnClickListener { confirmDeleteDiffusion() }
         findViewById<com.apk.claw.android.widget.KButton>(R.id.btn_save_diffusion_config).setOnClickListener { saveDiffusionConfig() }
 
+        // 恢复已保存的 diffusion 配置
+        restoreDiffusionConfig()
+
+        // 自动扫描本地已下载的 diffusion 模型
+        autoScanDiffusionModel()
         updateDiffusionUI()
     }
 
@@ -956,11 +954,43 @@ class LocalModelConfigActivity : BaseActivity() {
     private fun saveDiffusionConfig() {
         val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this)
         engine.defaultSteps = seekbarDiffusionSteps.progress.coerceAtLeast(1)
-        engine.backendType = if (spinnerDiffusionBackend.selectedItemPosition == 0)
+        val backend = if (spinnerDiffusionBackend.selectedItemPosition == 0)
             com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL
         else
             com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_CPU
+        engine.backendType = backend
         Toast.makeText(this, getString(R.string.diffusion_model_config_saved), Toast.LENGTH_SHORT).show()
+    }
+
+    /** 恢复已保存的 diffusion 配置（steps、backend） */
+    private fun restoreDiffusionConfig() {
+        val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this)
+        // 恢复 steps
+        val savedSteps = engine.defaultSteps
+        seekbarDiffusionSteps.progress = savedSteps.coerceIn(1, 50)
+        tvDiffusionStepsValue.text = savedSteps.toString()
+        // 恢复 backend
+        val savedBackend = engine.backendType
+        spinnerDiffusionBackend.setSelection(
+            if (savedBackend == com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL) 0 else 1
+        )
+    }
+
+    /**
+     * 自动扫描本地已下载的 diffusion 模型文件。
+     * 如果发现完整模型，自动将路径记录到 DiffusionEngine 的持久化配置中，
+     * 并在 UI 上显示「已下载」状态，用户可以直接点击加载。
+     */
+    private fun autoScanDiffusionModel() {
+        val dir = diffusionModelDir
+        if (!dir.exists() || !dir.isDirectory) return
+        if (!isDiffusionModelDownloaded()) return
+
+        val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this)
+        // 将模型目录路径持久化到 MMKV，下次进入可直接使用
+        if (engine.modelPath != dir.absolutePath) {
+            engine.modelPath = dir.absolutePath
+        }
     }
 
     /**
@@ -1111,7 +1141,10 @@ class LocalModelConfigActivity : BaseActivity() {
                     }
                 }
 
-                // 3. 下载完成
+                // 3. 下载完成 — 持久化模型路径
+                val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this@LocalModelConfigActivity)
+                engine.modelPath = dir.absolutePath
+
                 withContext(Dispatchers.Main) {
                     progressDiffusionDownload.progress = progressDiffusionDownload.max
                     tvDiffusionDownloadProgress.text = getString(R.string.diffusion_model_download_complete)
@@ -1231,6 +1264,8 @@ class LocalModelConfigActivity : BaseActivity() {
                     }
                     val dir = diffusionModelDir
                     if (dir.exists()) dir.deleteRecursively()
+                    // 清除持久化的模型路径
+                    com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this@LocalModelConfigActivity).modelPath = ""
                     withContext(Dispatchers.Main) {
                         isDiffusionModelLoaded = false
                         updateDiffusionUI()
