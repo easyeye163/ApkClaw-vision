@@ -874,13 +874,14 @@ class LocalModelConfigActivity : BaseActivity() {
     private val diffusionModelDir: File
         get() = File(filesDir, DIFFUSION_MODEL_DIR)
 
-    /** 检查 diffusion 模型目录是否包含所需文件 */
+    /** 检查 diffusion 模型目录是否包含所需文件（递归搜索子目录） */
     private fun isDiffusionModelDownloaded(): Boolean {
         val dir = diffusionModelDir
         if (!dir.exists() || !dir.isDirectory) return false
-        // MNN-Diffusion SD 1.5 至少需要这些文件
+        // MNN-Diffusion SD 1.5 至少需要这些文件（可能在子目录中）
         val requiredFiles = listOf("clip_model.mnn", "unet_model.mnn", "vae_decoder_model.mnn")
-        return requiredFiles.all { File(dir, it).exists() }
+        val existingNames = dir.walkTopDown().filter { it.isFile }.map { it.name }.toSet()
+        return requiredFiles.all { it in existingNames }
     }
 
     /** 计算已下载模型的总大小 */
