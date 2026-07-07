@@ -31,6 +31,7 @@ MNN_BUILD_DIR="/tmp/mnn_android_build"
 MNN_SOURCE_DIR="/tmp/MNN_build"
 
 NDK_PATH="${ANDROID_NDK_HOME:-/home/z/android-sdk/ndk/27.2.12479018}"
+CMAKE_BIN="${ANDROID_HOME:-/home/z/android-sdk}/cmake/3.22.1/bin/cmake"
 API_LEVEL=28  # minSdk
 
 # Colors for output
@@ -54,11 +55,16 @@ check_prerequisites() {
     fi
     log_info "NDK found: $NDK_PATH"
 
-    if ! command -v cmake &> /dev/null; then
+    if ! command -v cmake &> /dev/null && [ ! -x "$CMAKE_BIN" ]; then
         log_error "cmake not found. Install it first."
         exit 1
     fi
-    log_info "cmake found: $(cmake --version | head -1)"
+    if command -v cmake &> /dev/null; then
+        log_info "cmake found: $(cmake --version | head -1)"
+    else
+        export PATH="$(dirname "$CMAKE_BIN"):$PATH"
+        log_info "cmake found: $($CMAKE_BIN --version | head -1)"
+    fi
 
     if ! command -v git &> /dev/null; then
         log_error "git not found. Install it first."
