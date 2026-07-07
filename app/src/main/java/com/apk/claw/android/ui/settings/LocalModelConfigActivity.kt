@@ -1204,48 +1204,59 @@ class LocalModelConfigActivity : BaseActivity() {
         tvDiffusionStatus.text = getString(R.string.diffusion_model_status_loading)
 
         lifecycleScope.launch {
+            var errorMsg: String? = null
             try {
                 val engine = com.apk.claw.android.local.diffusion.DiffusionEngine.getInstance(this@LocalModelConfigActivity)
 
                 // 检查 native 库是否可用
                 when (val s = engine.state.value) {
                     is com.apk.claw.android.local.diffusion.DiffusionState.NativeNotAvailable -> {
-                        throw RuntimeException(s.message)
+                        errorMsg = s.message
                     }
                     is com.apk.claw.android.local.diffusion.DiffusionState.Error -> {
-                        // 可能是之前的错误，尝试重新初始化
+                        errorMsg = "引擎初始化异常，请重启应用后重试"
                     }
-                    else -> {}
+                    else -> {
+                        // 保存模型路径并设置后端
+                        engine.modelPath = diffusionModelDir.absolutePath
+                        engine.backendType = if (spinnerDiffusionBackend.selectedItemPosition == 0)
+                            com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL
+                        else
+                            com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_CPU
+
+                        // 加载模型（最多 120 秒超时）
+                        val result = kotlinx.coroutines.withTimeoutOrNull(120_000) {
+                            engine.loadModel()
+                        }
+                        if (result == null) {
+                            errorMsg = "模型加载超时（120秒）"
+                        } else {
+                            isDiffusionModelLoaded = true
+                        }
+                    }
                 }
-
-                // 保存模型路径并设置后端
-                engine.modelPath = diffusionModelDir.absolutePath
-                engine.backendType = if (spinnerDiffusionBackend.selectedItemPosition == 0)
-                    com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL
-                else
-                    com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_CPU
-
-                // 加载模型（最多 120 秒超时）
-                kotlinx.coroutines.withTimeoutOrNull(120_000) {
-                    engine.loadModel()
-                } ?: run {
-                    throw RuntimeException("模型加载超时（120秒）")
-                }
-
-                isDiffusionModelLoaded = true
-                tvDiffusionStatus.text = getString(R.string.diffusion_model_load_success)
-                Toast.makeText(this@LocalModelConfigActivity, getString(R.string.diffusion_model_load_success), Toast.LENGTH_SHORT).show()
             } catch (e: kotlinx.coroutines.CancellationException) {
-                tvDiffusionStatus.text = getString(R.string.diffusion_model_download_cancelled)
+                errorMsg = getString(R.string.diffusion_model_download_cancelled)
             } catch (e: Exception) {
-                tvDiffusionStatus.text = getString(R.string.diffusion_model_load_failed, e.message ?: "Unknown")
+                errorMsg = e.message ?: "Unknown error"
+            }
+
+            // 统一处理结果
+            if (errorMsg != null) {
+                // 加载失败 — 显示错误对话框，不调用 updateDiffusionUI 覆盖
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_status_loading_error, errorMsg)
                 AlertDialog.Builder(this@LocalModelConfigActivity)
-                    .setTitle(getString(R.string.local_model_load_fail_title))
-                    .setMessage(e.message ?: "Unknown error")
+                    .setTitle("文生图模型加载失败")
+                    .setMessage(errorMsg)
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
+                btnDiffusionLoad.isEnabled = true
+            } else {
+                // 加载成功
+                tvDiffusionStatus.text = getString(R.string.diffusion_model_load_success)
+                Toast.makeText(this@LocalModelConfigActivity, getString(R.string.diffusion_model_load_success), Toast.LENGTH_SHORT).show()
+                updateDiffusionUI()
             }
-            updateDiffusionUI()
         }
     }
 
