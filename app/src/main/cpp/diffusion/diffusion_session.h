@@ -2,15 +2,19 @@
 // diffusion_session.h
 // MNN-Diffusion JNI bridge for ApkClaw
 //
-// NOTE: Full compilation requires MNN headers in mnn_include/ (after running build_mnn.sh).
-// The actual MNN::DIFFUSION::Diffusion type is only used in diffusion_session.cpp.
-//
 
 #pragma once
 
 #include <string>
 #include <functional>
 #include <memory>
+#include "diffusion/diffusion.hpp"
+
+// Wrapper to hold MNN Diffusion pointer
+class MNN_DIFFUSION_Diffusion {
+public:
+    std::unique_ptr<MNN::DIFFUSION::Diffusion> ptr;
+};
 
 namespace aclaw {
 
@@ -18,6 +22,8 @@ class DiffusionSession {
 public:
     explicit DiffusionSession(std::string resourcePath, int memoryMode, int backendType);
     ~DiffusionSession();
+
+    bool isLoaded() const { return loaded_; }
 
     void run(const std::string& prompt,
              const std::string& outputPath,
@@ -30,8 +36,7 @@ private:
     std::string resourcePath_;
     int memoryMode_;
     int backendType_;
-    // Opaque pointer to MNN::DIFFUSION::Diffusion — defined in diffusion_session.cpp
-    std::unique_ptr<class MNN_DIFFUSION_Diffusion> diffusion_;
+    std::unique_ptr<MNN_DIFFUSION_Diffusion> diffusion_;
 };
 
 } // namespace aclaw

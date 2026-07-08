@@ -38,6 +38,11 @@ Java_com_apk_claw_android_local_diffusion_DiffusionEngine_nativeInit(
 
     try {
         auto *session = new aclaw::DiffusionSession(pathStr, memoryMode, backendType);
+        if (!session->isLoaded()) {
+            JNI_LOGE("nativeInit: load() failed");
+            delete session;
+            return 0;
+        }
         return reinterpret_cast<jlong>(session);
     } catch (const std::exception &e) {
         JNI_LOGE("nativeInit exception: %s", e.what());
@@ -111,11 +116,6 @@ Java_com_apk_claw_android_local_diffusion_DiffusionEngine_nativeGenerate(
 
     // success
     jstring successKey = env->NewStringUTF("success");
-    jobject successValue = env->GetStaticObjectField(
-            env->FindClass("java/lang/Boolean"),
-            env->GetStaticMethodID(env->FindClass("java/lang/Boolean"), "VALUE",
-                                   "Ljava/lang/Boolean;"));
-    // Actually use Boolean.valueOf
     jclass boolClass = env->FindClass("java/lang/Boolean");
     jmethodID valueOfMethod = env->GetStaticMethodID(boolClass, "valueOf", "(Z)Ljava/lang/Boolean;");
     jobject successObj = env->CallStaticObjectMethod(boolClass, valueOfMethod, success);

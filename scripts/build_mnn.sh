@@ -107,12 +107,14 @@ build_mnn() {
     # Run MNN's Android build with Diffusion flags
     bash "$BUILD_SCRIPT" \
         "-DMNN_BUILD_DIFFUSION=ON" \
+        "-DMNN_BUILD_LLM=ON" \
+        "-DMNN_BUILD_LLM=ON" \
         "-DMNN_LOW_MEMORY=ON" \
         "-DMNN_BUILD_OPENCV=ON" \
         "-DMNN_IMGCODECS=ON" \
         "-DMNN_OPENCL=ON" \
         "-DMNN_SEP_BUILD=OFF" \
-        "-DMNN_SUPPORT_TRANSFORMER_FUSE=ON" \
+        "-DMNN_SUPPORT_TRANSFORMER_FUSE=OFF" \
         "-DANDROID_ABI=arm64-v8a" \
         "-DANDROID_NATIVE_API_LEVEL=$API_LEVEL"
 

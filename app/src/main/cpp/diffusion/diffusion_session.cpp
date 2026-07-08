@@ -2,28 +2,15 @@
 // diffusion_session.cpp
 // MNN-Diffusion implementation for ApkClaw
 //
-// BUILD REQUIREMENT: This file requires MNN headers to be present at
-//   app/src/main/cpp/mnn_include/
-// Run scripts/build_mnn.sh to build libMNN.so and copy headers.
-//
 
 #include "diffusion_session.h"
 #include <android/log.h>
-
-// MNN headers (available after build_mnn.sh)
-#include "diffusion/diffusion.hpp"
 
 #define DIFF_LOG_TAG "ApkClawDiffusion"
 #define DIFF_LOGI(...) __android_log_print(ANDROID_LOG_INFO, DIFF_LOG_TAG, __VA_ARGS__)
 #define DIFF_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, DIFF_LOG_TAG, __VA_ARGS__)
 
 using namespace MNN::DIFFUSION;
-
-// Wrapper to hold MNN Diffusion pointer without exposing MNN headers in .h
-class MNN_DIFFUSION_Diffusion {
-public:
-    std::unique_ptr<Diffusion> ptr;
-};
 
 namespace aclaw {
 
@@ -32,7 +19,7 @@ DiffusionSession::DiffusionSession(std::string resourcePath, int memoryMode, int
       memoryMode_(memoryMode),
       backendType_(backendType) {
 
-    auto forwardType = static_cast<MNN::MNNForwardType>(backendType);
+    auto forwardType = static_cast<MNNForwardType>(backendType);
 
     DIFF_LOGI("Creating Diffusion: path=%s memoryMode=%d backend=%d",
               resourcePath_.c_str(), memoryMode_, backendType_);
@@ -45,15 +32,21 @@ DiffusionSession::DiffusionSession(std::string resourcePath, int memoryMode, int
         memoryMode_
     ));
 
-    if (d->ptr) {
-        DIFF_LOGI("Diffusion created, loading models...");
-        d->ptr->load();
-        loaded_ = true;
-        DIFF_LOGI("Diffusion models loaded successfully");
-        diffusion_ = std::move(d);
-    } else {
-        DIFF_LOGE("Failed to create Diffusion instance");
+    if (!d->ptr) {
+        DIFF_LOGE("createDiffusion returned nullptr");
+        return;
     }
+
+    DIFF_LOGI("Diffusion object created, calling load()...");
+    bool loadOk = d->ptr->load();
+    if (!loadOk) {
+        DIFF_LOGE("Diffusion::load() returned false");
+        return;
+    }
+
+    loaded_ = true;
+    diffusion_ = std::move(d);
+    DIFF_LOGI("Diffusion models loaded successfully");
 }
 
 DiffusionSession::~DiffusionSession() {
@@ -76,14 +69,17 @@ void DiffusionSession::run(const std::string& prompt,
 
     if (!loaded_) {
         DIFF_LOGI("Reloading diffusion models...");
-        diffusion_->ptr->load();
+        if (!diffusion_->ptr->load()) {
+            DIFF_LOGE("Failed to reload");
+            return;
+        }
         loaded_ = true;
     }
 
     DIFF_LOGI("Starting generation: prompt='%s' output='%s' steps=%d seed=%d",
               prompt.c_str(), outputPath.c_str(), iterNum, randomSeed);
 
-    diffusion_->ptr->run(prompt, "", iterNum, randomSeed, progressCallback);
+    diffusion_->ptr->run(prompt, outputPath, iterNum, randomSeed, progressCallback);
 
     DIFF_LOGI("Generation complete, output: %s", outputPath.c_str());
 }

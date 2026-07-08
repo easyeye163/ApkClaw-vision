@@ -882,7 +882,8 @@ class LocalModelConfigActivity : BaseActivity() {
         val requiredFiles = listOf(
             "text_encoder.mnn", "text_encoder.mnn.weight",
             "unet.mnn", "unet.mnn.weight",
-            "vae_decoder.mnn", "vae_decoder.mnn.weight"
+            "vae_decoder.mnn", "vae_decoder.mnn.weight",
+            "tokenizer.mtok"
         )
         val existingNames = dir.walkTopDown().filter { it.isFile }.map { it.name }.toSet()
         return requiredFiles.all { it in existingNames }
