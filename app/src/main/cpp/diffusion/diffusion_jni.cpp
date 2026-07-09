@@ -7,15 +7,61 @@
 #include <android/log.h>
 #include <string>
 #include <chrono>
+#include <dlfcn.h>
 #include "diffusion_session.h"
+
+// Minimal OpenCL types for dlsym-based check (avoid depending on CL headers at compile time)
+typedef unsigned int cl_uint;
+typedef int cl_int;
+#define CL_SUCCESS 0
 
 #define JNI_TAG "ApkClawDiffusionJNI"
 #define JNI_LOGI(...) __android_log_print(ANDROID_LOG_INFO, JNI_TAG, __VA_ARGS__)
+#define JNI_LOGW(...) __android_log_print(ANDROID_LOG_WARN, JNI_TAG, __VA_ARGS__)
 #define JNI_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, JNI_TAG, __VA_ARGS__)
 
 static jint progressMethodId = 0;
 
 extern "C" {
+
+// Check if OpenCL is available on this device.
+// Returns JNI_TRUE if at least one OpenCL platform/device is found,
+// JNI_FALSE otherwise. Safe to call on any device.
+JNIEXPORT jboolean JNICALL
+Java_com_apk_claw_android_local_diffusion_DiffusionEngine_nativeCheckOpenCL(
+        JNIEnv * /* env */,
+        jobject /* thiz */) {
+
+    // MNN's OpenCL backend will attempt clGetPlatformIDs internally.
+    // We mimic that check here to avoid loading the full Diffusion model.
+    // If libOpenCL.so is missing (common on older/low-end devices),
+    // dlopen will fail and we return false.
+    void *libCL = dlopen("libOpenCL.so", RTLD_NOW | RTLD_LOCAL);
+    if (!libCL) {
+        JNI_LOGI("nativeCheckOpenCL: libOpenCL.so not found (%s)", dlerror());
+        return JNI_FALSE;
+    }
+
+    typedef cl_int (*clGetPlatformIDs_fn)(cl_uint, void *, cl_uint *);
+    auto fn = (clGetPlatformIDs_fn)dlsym(libCL, "clGetPlatformIDs");
+    if (!fn) {
+        dlclose(libCL);
+        JNI_LOGI("nativeCheckOpenCL: clGetPlatformIDs not found");
+        return JNI_FALSE;
+    }
+
+    cl_uint numPlatforms = 0;
+    cl_int err = fn(0, nullptr, &numPlatforms);
+    dlclose(libCL);
+
+    if (err != CL_SUCCESS || numPlatforms == 0) {
+        JNI_LOGI("nativeCheckOpenCL: no OpenCL platforms found (err=%d)", err);
+        return JNI_FALSE;
+    }
+
+    JNI_LOGI("nativeCheckOpenCL: %u platform(s) found", numPlatforms);
+    return JNI_TRUE;
+}
 
 // Initialize a native DiffusionSession.
 // Returns a pointer cast to jlong (0 on failure).
@@ -36,12 +82,40 @@ Java_com_apk_claw_android_local_diffusion_DiffusionEngine_nativeInit(
         return 0;
     }
 
+    // MNN_FORWARD_OPENCL = 3, MNN_FORWARD_CPU = 0
+    const int MNN_FORWARD_OPENCL = 3;
+    const int MNN_FORWARD_CPU = 0;
+
+    // If OpenCL was requested, try it first; on failure, fall back to CPU automatically.
+    // This handles low-end GPUs (Adreno 305/306/505 on Snapdragon 4) where OpenCL
+    // may be present but too limited for MNN Diffusion workloads.
+    int effectiveBackend = backendType;
+    bool triedOpenCL = false;
+
+    if (backendType == MNN_FORWARD_OPENCL) {
+        triedOpenCL = true;
+    }
+
     try {
-        auto *session = new aclaw::DiffusionSession(pathStr, memoryMode, backendType);
+        auto *session = new aclaw::DiffusionSession(pathStr, memoryMode, effectiveBackend);
         if (!session->isLoaded()) {
-            JNI_LOGE("nativeInit: load() failed");
-            delete session;
-            return 0;
+            if (triedOpenCL && effectiveBackend == MNN_FORWARD_OPENCL) {
+                // OpenCL failed — retry with CPU
+                JNI_LOGW("nativeInit: OpenCL load failed, retrying with CPU backend");
+                delete session;
+                effectiveBackend = MNN_FORWARD_CPU;
+                session = new aclaw::DiffusionSession(pathStr, memoryMode, effectiveBackend);
+                if (!session->isLoaded()) {
+                    JNI_LOGE("nativeInit: CPU fallback also failed");
+                    delete session;
+                    return 0;
+                }
+                JNI_LOGI("nativeInit: CPU fallback succeeded");
+            } else {
+                JNI_LOGE("nativeInit: load() failed");
+                delete session;
+                return 0;
+            }
         }
         return reinterpret_cast<jlong>(session);
     } catch (const std::exception &e) {

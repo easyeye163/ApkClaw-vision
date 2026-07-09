@@ -42,9 +42,10 @@ class DiffusionEngine private constructor(
         private const val KEY_MEMORY_MODE = "diffusion_memory_mode"   // 0=saving, 1=enough, 2=balance
         private const val KEY_STEPS = "diffusion_steps"               // default 20
 
-        // Backend types (matching MNNForwardType)
+        // Backend types (matching MNNForwardType: CPU=0, METAL=1, CUDA=2, OPENCL=3, AUTO=4)
         const val BACKEND_CPU = 0
-        const val BACKEND_OPENCL = 4
+        const val BACKEND_OPENCL = 3  // MNN_FORWARD_OPENCL = 3 (was incorrectly set to 4 = MNN_FORWARD_AUTO)
+        const val BACKEND_AUTO = 4
 
         // Memory modes
         const val MEMORY_SAVING = 0
@@ -99,8 +100,17 @@ class DiffusionEngine private constructor(
         get() = kv.decodeString(KEY_MODEL_PATH, "") ?: ""
         set(value) { kv.encode(KEY_MODEL_PATH, value) }
 
+    /** Effective backend: returns CPU if OpenCL was selected but device doesn't support it */
     var backendType: Int
-        get() = kv.decodeInt(KEY_BACKEND_TYPE, BACKEND_OPENCL)
+        get() {
+            val saved = kv.decodeInt(KEY_BACKEND_TYPE, BACKEND_OPENCL)
+            // If user selected OpenCL but device lacks support, fall back to CPU
+            if (saved == BACKEND_OPENCL && !isOpenCLAvailable()) {
+                Log.w(TAG, "OpenCL requested but not available on this device, falling back to CPU")
+                return BACKEND_CPU
+            }
+            return saved
+        }
         set(value) { kv.encode(KEY_BACKEND_TYPE, value) }
 
     var memoryMode: Int
@@ -364,6 +374,36 @@ class DiffusionEngine private constructor(
             Log.i(TAG, "Diffusion engine shut down")
         }
     }
+
+    // ───────────────────────────────────────────────────────────────────────
+    // OpenCL availability detection
+    // ───────────────────────────────────────────────────────────────────────
+
+    /**
+     * Quick runtime check for basic OpenCL support.
+     * Snapdragon 4xx (Adreno 305/306/505) and other low-end GPUs may not
+     * support OpenCL 1.2 fully, causing MNN model loading to fail.
+     */
+    private var openCLAvailable: Boolean? = null
+
+    private fun isOpenCLAvailable(): Boolean {
+        openCLAvailable?.let { return it }
+        var available = false
+        try {
+            // Try to load the OpenCL native library
+            System.loadLibrary("apkclaw_diffusion")
+            available = nativeCheckOpenCL()
+        } catch (_: UnsatisfiedLinkError) {
+            Log.w(TAG, "Native library not loaded, cannot check OpenCL")
+        } catch (_: Exception) {
+            Log.w(TAG, "OpenCL check failed")
+        }
+        openCLAvailable = available
+        Log.i(TAG, "OpenCL available: $available")
+        return available
+    }
+
+    private external fun nativeCheckOpenCL(): Boolean
 
     // ───────────────────────────────────────────────────────────────────────
     // Progress listener interface (called from native code via JNI)
