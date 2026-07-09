@@ -109,7 +109,7 @@ class DiffusionEngine private constructor(
     var backendType: Int
         get() {
             // One-time migration: old code saved 4 (AUTO) for OpenCL, now corrected to 3
-            if (!kv.decodeBoolForKey(KEY_MIGRATED_BACKEND, false)) {
+            if (!kv.decodeBool(KEY_MIGRATED_BACKEND, false)) {
                 val old = kv.decodeInt(KEY_BACKEND_TYPE, -1)
                 if (old == 4) {
                     kv.encode(KEY_BACKEND_TYPE, BACKEND_OPENCL)
