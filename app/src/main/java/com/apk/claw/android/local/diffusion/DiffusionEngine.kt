@@ -38,9 +38,10 @@ class DiffusionEngine private constructor(
 
         // MMKV keys
         private const val KEY_MODEL_PATH = "diffusion_model_path"
-        private const val KEY_BACKEND_TYPE = "diffusion_backend_type" // 0=CPU, 4=OpenCL
+        private const val KEY_BACKEND_TYPE = "diffusion_backend_type" // 0=CPU, 3=OpenCL, 4=Auto(deprecated)
         private const val KEY_MEMORY_MODE = "diffusion_memory_mode"   // 0=saving, 1=enough, 2=balance
         private const val KEY_STEPS = "diffusion_steps"               // default 20
+        private const val KEY_MIGRATED_BACKEND = "diffusion_backend_migrated"
 
         // Backend types (matching MNNForwardType: CPU=0, METAL=1, CUDA=2, OPENCL=3, AUTO=4)
         const val BACKEND_CPU = 0
@@ -100,16 +101,45 @@ class DiffusionEngine private constructor(
         get() = kv.decodeString(KEY_MODEL_PATH, "") ?: ""
         set(value) { kv.encode(KEY_MODEL_PATH, value) }
 
-    /** Effective backend: returns CPU if OpenCL was selected but device doesn't support it */
+    /**
+     * Effective backend with automatic fallback:
+     * - Migrates old BACKEND_AUTO(4) to BACKEND_OPENCL(3)
+     * - Falls back to CPU if OpenCL is not available on device
+     */
     var backendType: Int
         get() {
+            // One-time migration: old code saved 4 (AUTO) for OpenCL, now corrected to 3
+            if (!kv.decodeBoolForKey(KEY_MIGRATED_BACKEND, false)) {
+                val old = kv.decodeInt(KEY_BACKEND_TYPE, -1)
+                if (old == 4) {
+                    kv.encode(KEY_BACKEND_TYPE, BACKEND_OPENCL)
+                    Log.i(TAG, "Migrated backend type: 4(AUTO) -> 3(OPENCL)")
+                }
+                kv.encode(KEY_MIGRATED_BACKEND, true)
+            }
+
             val saved = kv.decodeInt(KEY_BACKEND_TYPE, BACKEND_OPENCL)
-            // If user selected OpenCL but device lacks support, fall back to CPU
-            if (saved == BACKEND_OPENCL && !isOpenCLAvailable()) {
-                Log.w(TAG, "OpenCL requested but not available on this device, falling back to CPU")
+
+            // Normalize: any value > BACKEND_OPENCL that isn't explicitly AUTO should be treated as OpenCL
+            val effective = when (saved) {
+                BACKEND_CPU -> BACKEND_CPU
+                BACKEND_OPENCL, BACKEND_AUTO -> BACKEND_OPENCL
+                else -> {
+                    Log.w(TAG, "Unknown backend type $saved, defaulting to CPU")
+                    BACKEND_CPU
+                }
+            }
+
+            // If OpenCL requested, check if device actually supports it
+            if (effective == BACKEND_OPENCL && !isNativeLibLoaded()) {
+                Log.w(TAG, "Native lib not loaded, cannot use OpenCL, falling back to CPU")
                 return BACKEND_CPU
             }
-            return saved
+            if (effective == BACKEND_OPENCL && !isOpenCLSupported()) {
+                Log.w(TAG, "OpenCL not available on this device, falling back to CPU")
+                return BACKEND_CPU
+            }
+            return effective
         }
         set(value) { kv.encode(KEY_BACKEND_TYPE, value) }
 
@@ -151,15 +181,18 @@ class DiffusionEngine private constructor(
             try {
                 _state.value = DiffusionState.Initializing
                 System.loadLibrary("apkclaw_diffusion")
+                nativeLibLoaded = true
                 _state.value = DiffusionState.NativeLoaded
                 Log.i(TAG, "Diffusion native library loaded")
             } catch (e: UnsatisfiedLinkError) {
                 Log.w(TAG, "Diffusion native library not available (MNN not built yet)", e)
+                nativeLibLoaded = false
                 _state.value = DiffusionState.NativeNotAvailable(
                     "MNN-Diffusion 未编译。请运行 scripts/build_mnn.sh 构建依赖。"
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load diffusion native library", e)
+                nativeLibLoaded = false
                 _state.value = DiffusionState.Error(e)
             }
         }
@@ -379,28 +412,28 @@ class DiffusionEngine private constructor(
     // OpenCL availability detection
     // ───────────────────────────────────────────────────────────────────────
 
-    /**
-     * Quick runtime check for basic OpenCL support.
-     * Snapdragon 4xx (Adreno 305/306/505) and other low-end GPUs may not
-     * support OpenCL 1.2 fully, causing MNN model loading to fail.
-     */
-    private var openCLAvailable: Boolean? = null
+    /** Whether the native library has been successfully loaded */
+    private var nativeLibLoaded = false
 
-    private fun isOpenCLAvailable(): Boolean {
-        openCLAvailable?.let { return it }
-        var available = false
+    private fun isNativeLibLoaded(): Boolean = nativeLibLoaded
+
+    /**
+     * Runtime check for OpenCL support via JNI.
+     * Safe to call multiple times — result is cached.
+     */
+    private var openCLSupported: Boolean? = null
+
+    private fun isOpenCLSupported(): Boolean {
+        openCLSupported?.let { return it }
+        var supported = false
         try {
-            // Try to load the OpenCL native library
-            System.loadLibrary("apkclaw_diffusion")
-            available = nativeCheckOpenCL()
-        } catch (_: UnsatisfiedLinkError) {
-            Log.w(TAG, "Native library not loaded, cannot check OpenCL")
+            supported = nativeCheckOpenCL()
         } catch (_: Exception) {
             Log.w(TAG, "OpenCL check failed")
         }
-        openCLAvailable = available
-        Log.i(TAG, "OpenCL available: $available")
-        return available
+        openCLSupported = supported
+        Log.i(TAG, "OpenCL supported: $supported")
+        return supported
     }
 
     private external fun nativeCheckOpenCL(): Boolean

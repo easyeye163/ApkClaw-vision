@@ -1223,12 +1223,16 @@ class LocalModelConfigActivity : BaseActivity() {
                         errorMsg = "引擎初始化异常，请重启应用后重试"
                     }
                     else -> {
-                        // 保存模型路径并设置后端
+                        // 保存模型路径
                         engine.modelPath = diffusionModelDir.absolutePath
+                        // Use backendType setter (which stores to MMKV) based on spinner
+                        // The getter will handle OpenCL detection + CPU fallback automatically
                         engine.backendType = if (spinnerDiffusionBackend.selectedItemPosition == 0)
                             com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_OPENCL
                         else
                             com.apk.claw.android.local.diffusion.DiffusionEngine.BACKEND_CPU
+
+                        Log.i("LocalModelConfig", "Loading diffusion: backend=${engine.backendType} (saved=${if (spinnerDiffusionBackend.selectedItemPosition == 0) "OpenCL" else "CPU"})")
 
                         // 加载模型（最多 120 秒超时）
                         val result = kotlinx.coroutines.withTimeoutOrNull(120_000) {
