@@ -81,6 +81,11 @@ android {
     }
 
     packaging {
+        jniLibs {
+            pickFirsts += setOf(
+                "lib/arm64-v8a/libc++_shared.so"
+            )
+        }
         resources {
             excludes += setOf(
                 "META-INF/DEPENDENCIES",
@@ -92,13 +97,13 @@ android {
         }
     }
 
-    // CMake for MNN-Diffusion JNI bridge (separate from prebuilt llama.cpp .so)
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
+    // externalNativeBuild disabled — using prebuilt .so in jniLibs
+    // externalNativeBuild {
+    //     cmake {
+    //         path = file("src/main/cpp/CMakeLists.txt")
+    //         version = "3.22.1"
+    //     }
+    // }
 }
 
 dependencies {
